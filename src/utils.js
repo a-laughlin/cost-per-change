@@ -135,7 +135,7 @@ export const pipeAllArgs=(fn1,...fns)=>(arg1,...args)=>{
   }
   return lastValidValue;
 }
-export const pipeAllArgsAsync = (firstFn,...fns)=>(firstInput,...args)=>{ // enables
+const pipeAsyncFactory = (catchFn)=>(firstFn,...fns)=>(firstInput,...args)=>{ // enables
   const meta = {// don't love passing a mutable obj in but works for now.  Not a public api.
     _first:undefined,
     _args:args,
@@ -166,18 +166,12 @@ export const pipeAllArgsAsync = (firstFn,...fns)=>(firstInput,...args)=>{ // ena
         meta._lastValid = meta._last = last;
         return fn(last,...args);
       })
-      .catch(last=>last)
+      .catch(catchAndLogPipeError)
     },Promise.resolve(meta._last))
   })
-  .catch(identity)
+  .catch(catchAndLogPipeError)
 };
-export const reverse = arr=>arr.reverse();
-export const pipe = (fn1,...fns)=>pipeAllArgs(fn1,...fns.map(arity1));
-export const pipeAsync = (fn1,...fns)=>pipeAllArgsAsync(fn1,...fns.map(arity1));
-export const compose = (...fns)=>pipe(...fns.reverse());
-export const composeAsync = (...fns)=>pipeAsync(...fns.reverse());
 
-// flow control ... these may be replaceable with rxjs...
 // pipeAsync - returns a promise
 // desires:
 //  reference first pipe arg,
@@ -190,9 +184,15 @@ export const composeAsync = (...fns)=>pipeAsync(...fns.reverse());
 //  enables aborting
 //  Works with lodash/fp out of the box
 //
+export const reverse = arr=>arr.reverse();
+export const pipe = (fn1,...fns)=>pipeAllArgs(fn1,...fns.map(arity1));
+export const pipeAsync = (fn1,...fns)=>pipeAllArgsAsync(fn1,...fns.map(arity1));
+export const compose = (...fns)=>pipe(...fns.reverse());
+export const composeAsync = (...fns)=>pipeAsync(...fns.reverse());
 
 
-// functions that work with pipeAsync ... these may all be replaceable with rxjs...
+
+// functions that work with pipeAsync ... this whole section may be replaceable with observable streams
 export const asPipeModifier = (fn)=>{
   const wrapper = (...a)=>fn(...a);
   wrapper._pipeModifier=true;
@@ -216,6 +216,8 @@ export const logAndAbort = pipe(x=>{console.log('logAndAbort');return x;},catchA
 export const swallowPipeErrors = stubTrue;
 export const ifError = fn=>ifElse(isJSError,fn,identity);
 export const okElse = (onOkay,onError=logAndAbort)=>ifElse(isJSError,onError,onOkay);
+const defaultCatcher = isProductionEnv() ? logAndReset : logAndReset;
+export const pipeAllArgsAsync = pipeAsyncFactory(catchAndLogPipeError);
 
 
 

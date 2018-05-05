@@ -12,16 +12,14 @@ import {
   fltrv, fltrk,mapkToObjk, mapvToObjk, mapvToObjv, mapvToArr, mapkToArr,values,condNoExec as condnx,
   is,ifElse,cond,isArray,stubTrue,isFunction,ensureFunction,stubNull,tranToArr,and,converge, omitv, assignAll,
   fltrMapvToArr,pipeAllArgs,stubObject,isUndefined,not,stubFalse,round,debounce,memoizeFor,memoize,sortBy,keyBy,
-  isPlainObject,isString,kebabCase,pipeAsync,size,fltrvToArr,pipeAllArgsAsync,isNumber
+  isPlainObject,isString,kebabCase,pipeAsync,size,fltrvToArr,pipeAllArgsAsync,isNumber,ifError,logAndThrow
 } from './utils.js';
 
 
-// import {parseScript,parseModule} from 'esprima'
 import {
   mapProps as rcMap,withProps,shouldUpdate as rcShouldUpdate,setObservableConfig,
-  componentFromStream,createEventHandler
+  componentFromStream,createEventHandler,
 } from 'recompose';
-// import {transpile} from './transpiler.js';
 import { analyse,demoState,transpile } from './code-analysis'
 import {asyncRepoUrlToGraph,getExampleRepo} from './api'
 import * as d3 from 'd3';
@@ -251,10 +249,15 @@ const RepoHeader = Div(
 
 
 // Repo File Tree
-const TreeComponent = ({node,parentNode,id,getPath,getColor})=>{
+
+const TreeComponent = (props)=>{
+  const {node,parentNode,id,getPath,getColor,[statePublishKey]:pub} = props;
+  // lots of hackiness here to pass the state publish key prop
   const Circ = Circle(
-    withModal(id,Pre(withItems('Foo'))),
-    withProps({r:4,style:{fill:getColor(node),stroke:'#ccc',strokeWidth:'1px'}}),
+    withProps(({style={}})=>({
+      // [statePublishKey]:pub,
+      r:4,style:{...style,fill:getColor(node),stroke:'#ccc',strokeWidth:'1px'}})),
+    withModal(id,Pre(withItems(node.data.name))),
   );
   return (
   <g key={id}>
@@ -263,17 +266,17 @@ const TreeComponent = ({node,parentNode,id,getPath,getColor})=>{
       style={{ fill: 'none', stroke: '#ccc', strokeWidth:'1px' }}>
     </path>
     {ensureArray(node.children).map((c,i)=>(
-      <TreeComponent getPath={getPath} getColor={getColor} parentNode={node} node={c} id={`${id}.${i}`} key={`${id}.${i}`} />
+      <TreeComponent {...props} parentNode={node} node={c} id={`${id}.${i}`} key={`${id}.${i}`} />
     ))}
     <g transform={`translate(${node.y},${node.x})`}>
-      <Circ></Circ>
+      <Circ/>
       <text dy={'0.35em'} x={-6} textAnchor={'end'} style={{pointerEvents:'none',userSelect:'none',font:'8px sans-serif'}}>{node.data.name}</text>
     </g>
   </g>
 )}
 const TreeSVG = Svg(
   withItems(pipe(
-    from(({repoNodeOutEdges,repoNodes,id,repos})=>{
+    from(({repoNodeOutEdges,repoNodes,id,repos,[statePublishKey]:pub})=>{
 
       repoNodes = fltrv(matches({repoid:id}))(repoNodes);
       const rootNodes = {...repoNodes};
@@ -297,7 +300,7 @@ const TreeSVG = Svg(
         get('data.costPerChange'),
         ifElse(isUndefined,()=>'#fff',getRedGenerator(repos[id].costPerChangeMin,repos[id].costPerChangeMax))
       );
-      return {node:treeLayout,parentNode:treeLayout,id,getPath,getColor};
+      return {node:treeLayout,parentNode:treeLayout,id,getPath,getColor,[statePublishKey]:pub};
     }),
     toItemProps(TreeComponent)
   )),
