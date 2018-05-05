@@ -86,14 +86,17 @@ const Modal = Div(
     from('helpMessages.0'),
     ifElse(isUndefined,()=>stubNull,({msgKey})=>Div(
       withItems(modalComponents[msgKey]||`No Help Message with key "${msgKey}".`),
-      withStyles(`posF,top80px,p.5,dB,bgcF,z1000,b1px,bcC,bSolid,brad10px,crD`,{boxShadow:'0px 0px 205px 7px #777'})
+      withStyles(`posF,top80px,p.5,dB,wAuto,minw3,minh3,bgcF,z1000,b1px,bcC,bSolid,brad10px,crD`,{boxShadow:'0px 0px 205px 7px #777'})
     ))
   )),
-  h('posF,left0px,top0px,w100%,h100%,lJCC,lAIC,peN'),hi
+  h('posF,left0px,top-1000px,w100%,h100%,lJCC,lAIC'),hi
 );
 const withModal = (msgKey,MsgComponent) => {
   modalComponents[msgKey]||(modalComponents[msgKey]=isString(MsgComponent)?Span(withItems(MsgComponent)):MsgComponent);
-  return pipeClicks(({target})=>({msgKey,id:'0'}), toState('helpMessages.0'));
+  return compose(
+    pipeClicks(({target})=>({msgKey,id:'0'}), toState('helpMessages.0')),
+    v('crP')
+  );
 }
 
 
@@ -198,7 +201,9 @@ const RepoUrlInput = TextInput(
   ),
   h('t1em,w100%,b0,bb1x')
 );
-const RepoUrlHelp = Span(withItems(QMark),withModal(`repo-url-help`,Span(withItems(REPO_URL_HELP))),v('wsPL'));
+
+const RepoUrlHelpText = Span(withItems(REPO_URL_HELP),v('wsPL'));
+const RepoUrlHelpTrigger = Span(withItems(QMark),withModal(`repo-url-help`,RepoUrlHelpText));
 const RepoUrlContainer = Div(withItems(passIdTo(RepoUrlInput)),h('lGrow1'));
 const RemRepoButton = Button(withItems('Remove'),
   pipeClicks(
@@ -237,7 +242,7 @@ const CopyRepoButton = Button(withItems('Copy'),
 const RepoHeader = Div(
   withItems(
     Label(withItems('GitHub Path')),
-    RepoUrlHelp,
+    RepoUrlHelpTrigger,
     passIdTo(RepoUrlContainer,RemRepoButton,CopyRepoButton)
   ),
   h('w100%,b0,bt1x,bSolid,bcD,brad10x'),hi('ml.5,mr.5,mt.5')

@@ -20,7 +20,18 @@ Additional Thoughts:
   Maybe comparing across repos?
 - Show the code and/or more detailed metrics (probably in an iframe when files clicked).
   ^ Unsure how valuable more details are in practice. Feedback welcome.
+
+Code:
+- Escomplex (Code Complexity Metrics)
+- Lodash/FP
+- React (experimenting with string components + hocs)
+- Recompose (awesome HOCs)
+- Many custom HOCs for FP mojo
+- Babel standalone (for jsx, typescript, and to satisfy escomplex's limited palate)
+- D3 (for the tree and colors)
+- Styletron (translating inline styles to a stylesheet)
 `;
+
 
 export const REPO_URL_HELP = `
   Paste a repo directory path into this field.
