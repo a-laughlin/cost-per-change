@@ -14,6 +14,7 @@ Implementation Quirks:
 - Clicking links in the modal doesn't work yet.
 - Recalculating metrics requires updating the url.
 - Cut/pasting the url works fine, but typing doesn't. Oddly.
+- Clicking the files does nothing.
 
 Additional Thoughts:
 - Rule impacts need some thought to be more useful.
