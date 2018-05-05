@@ -4,7 +4,7 @@ import {
   reduce as reduceFP,capitalize,once,isError as isJSError,spread,rest,omit,filter as filterFP,uniqueId,
   find as findFP,findIndex,findKey,iteratee,matches as matchesFP,reject,concat,constant,overEvery,overSome,
   negate,flatMap,flattenDeep,over, identity, get,each as eachFP,pickBy,difference,
-  isIntteger,isError,isNumber,isObjectLike,hasIn,has,isWeakMap, isWeakSet, isMap, isSet,isEmpty,
+  isInteger,isError,isNumber,isObjectLike,hasIn,has,isWeakMap, isWeakSet, isMap, isSet,isEmpty,
   isString, isPlainObject, isFunction, isNull,isUndefined,set,unset,curry,mergeAllWith as mergeAllWithFP,mergeAll as mergeAllFP,
   omitBy,rearg,rangeStep,assignAll as assignAllFP,assignAllWith as assignAllWithFP,ary as arity,
   unary,sortBy,keyBy,kebabCase,size
@@ -17,7 +17,7 @@ export const [forOwn,transform,find,filter,map,each,mapValues,reduce] = [
 export {
   identity,get,pick,flatten,mapKeys,capitalize,once,isJSError,spread,rest,keyBy,
   findKey,uniqueId,findIndex,set,mergeWith,reject,concat,constant,flatMap,flattenDeep,omit,
-  isIntteger,isError,isNumber,isObjectLike,hasIn,has,isWeakMap, isWeakSet, isMap, isSet,isEmpty,
+  isInteger,isError,isNumber,isObjectLike,hasIn,has,isWeakMap, isWeakSet, isMap, isSet,isEmpty,
   isString, isPlainObject, isFunction, isNull,isUndefined,_set,unset,pickBy,curry,omitBy,sortBy,
   rearg,rangeStep,over,kebabCase,size
 }

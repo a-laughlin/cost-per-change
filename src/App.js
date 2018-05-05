@@ -36,8 +36,11 @@ import {
 } from './hoc-utils.js';
 
 // plus a few shorthands for lists vertical, horizontal, and grid HOCs
-import {v,h,g,vi,hi,gi,withStyles,parseStyleString} from './styles.js';
+import {v,h,g,vi,hi,gi,withStyles} from './styles.js';
 
+import {
+  ABOUT_HELP,REPO_URL_HELP,TIME_PER_CHANGE_HELP,CYCLOMATIC_HELP, MAINTAINABILITY_HELP,EFFORT_HELP
+} from './help-messages.js';
 
 // streams (there are a number of cases in the code where these separate concerns better)
 // import xstreamConfig from 'recompose/xstreamObservableConfig';
@@ -68,8 +71,8 @@ const passIdTo = (...Components)=>pipe(from(['id']),toItemProps(...Components));
 
 // Reds Scale Generator
 const reds = schemeReds[8].slice(0,5);
-console.log(`schemeReds[8]`,schemeReds[8] );
-const getColor = (min,max)=>d3.scaleQuantize().domain([min, max]).range(reds);
+const getRedGenerator = (min,max)=>d3.scaleQuantize().domain([min, max]).range(reds);
+const scaleRed = getRedGenerator(0,4);
 // const continuousReds = d3.scaleSequential(interpolateReds);
 // const discreteReds = d3.scaleOrdinal(schemeReds[5])
 // could make this more intuitive, comparing across domains, if the numbers were fixed... but... insufficient time.
@@ -79,12 +82,10 @@ const getColor = (min,max)=>d3.scaleQuantize().domain([min, max]).range(reds);
 // Modal
 const modalComponents={};
 const Modal = Div(
-  withItems(
-    pipe(
+  withItems(pipe(
     from('helpMessages.0'),
     ifElse(isUndefined,()=>stubNull,({msgKey})=>Div(
       withItems(modalComponents[msgKey]||`No Help Message with key "${msgKey}".`),
-      // withProps({style:{left,top,maxHeight}}),
       withStyles(`posF,top80px,p.5,dB,bgcF,z1000,b1px,bcC,bSolid,brad10px,crD`,{boxShadow:'0px 0px 205px 7px #777'})
     ))
   )),
@@ -117,22 +118,11 @@ const TokenHelpLink = A(
   withProps({target:'blank',href:'https://github.com/settings/tokens'}),
   withItems('github.com/settings/tokens')
 );
-const TokenHelpMsg = Span(withItems('Get Token at:',TokenHelpLink));
+const TokenHelpMsg = Span(withItems('Get Token at: ',TokenHelpLink,` (sorry that clicking links in the modal doesn't work yet)`));
 const TokenHelp = Span(withItems(QMark),withModal('token-help',TokenHelpMsg));
 const ruleLink = 'https://github.com/escomplex/escomplex/blob/master/METRICS.md';
 const RulesDocumentationLink = A(withProps({href:ruleLink,target:'blank'}),withItems(ruleLink));
-const AboutModal = P(withItems(
-  `
-  This is the aboutMessage.
-  This is a new line.
-  This is a new line.
-  This is a new line.
-  This is a new line.
-  `,
-  RulesDocumentationLink
-  ),
-  v('w100%,wsPL,peN')
-);
+const AboutModal = P(withItems( ABOUT_HELP, RulesDocumentationLink ), v('w100%,wsPL,peN'));
 const About = Span(withItems('About'),withModal('about', AboutModal));
 const TokenArea = Div(shouldUpdate(stubFalse),
   withItems(Label(withItems('GitHub Token')),TokenHelp,TokenTextContainer,About),
@@ -152,7 +142,7 @@ const RepoUrlInput = TextInput(
         repoNodes:compose(omitv,matches,polyGet({repoid:'id'})),
         repoNodeOutEdges:compose(omitv,matches,polyGet({repoid:'id'})),
       }),
-      pipeAllArgsAsync(// get new nodes, set new nodes + new url
+      pipeAllArgsAsync( // get new nodes, set new nodes + new url
         from({url:'target.value',id:'id',token:'userTokens.0.value'}),
         plog(`allArgsAsync`),
         asyncRepoUrlToGraph, // get new repoNodes and repoNodeOutEdges for this repo
@@ -164,7 +154,9 @@ const RepoUrlInput = TextInput(
           id:from('id')
         }),
         ({repos,repoNodes,repoNodeOutEdges,id,url})=>{
-          const repo = {...repos[id],url}; // add url
+          // HACKY SECTION - need to recalc values on change instead of storing derived
+          // need reselect or observables for that
+          const repo = {...repos[id],url,costPerChangeMax:0,costPerChangeMin:Infinity}; // add url
           let maxKey,minKey;
           return {
             repos:{...repos,[id]:repo},
@@ -187,8 +179,11 @@ const RepoUrlInput = TextInput(
                 if(repo[maxKey]<v){repo[maxKey]=v;}
                 n[k]=v;
               })(analysis);
-              n.costPerChange = (n.maintainability/100)*(n.cyclomatic*2)*repo.devcost*(repo.changetime/60);
-              n.userImpact = 100-n.cyclomatic-n.params;
+              // this might go negative if maintainability really sucks
+              n.costPerChange = (171-n.maintainability)/1000*repo.devcost*repo.changetime;
+              n.userImpact = n.cyclomatic;//+analysis.params.length/analysis.functions.length
+              if(repo.costPerChangeMin>n.costPerChange){repo.costPerChangeMin=n.costPerChange;}
+              if(repo.costPerChangeMax<n.costPerChange){repo.costPerChangeMax=n.costPerChange;}
               return n;
             })(repoNodes)
           };
@@ -203,9 +198,9 @@ const RepoUrlInput = TextInput(
   ),
   h('t1em,w100%,b0,bb1x')
 );
-const RepoUrlHelp = Span(withItems(QMark),withModal(`repo-url-help`));
+const RepoUrlHelp = Span(withItems(QMark),withModal(`repo-url-help`,Span(withItems(REPO_URL_HELP))),v('wsPL'));
 const RepoUrlContainer = Div(withItems(passIdTo(RepoUrlInput)),h('lGrow1'));
-const RemRepoButton = Button(withItems('-'),
+const RemRepoButton = Button(withItems('Remove'),
   pipeClicks(
     mapColl({
       repos:compose(omitv,matches,polyGet({id:'id'})),
@@ -248,26 +243,33 @@ const RepoHeader = Div(
   h('w100%,b0,bt1x,bSolid,bcD,brad10x'),hi('ml.5,mr.5,mt.5')
 );
 
+
+
+
 // Repo File Tree
-const TreeComponent = ({node,parentNode,id,getPath})=>{return (
+const TreeComponent = ({node,parentNode,id,getPath,getColor})=>{
+  const Circ = Circle(
+    withModal(id,Pre(withItems('Foo'))),
+    withProps({r:4,style:{fill:getColor(node),stroke:'#ccc',strokeWidth:'1px'}}),
+  );
+  return (
   <g key={id}>
     <path
       d={getPath(parentNode,node)}
       style={{ fill: 'none', stroke: '#ccc', strokeWidth:'1px' }}>
     </path>
     {ensureArray(node.children).map((c,i)=>(
-      <TreeComponent getPath={getPath} parentNode={node} node={c} id={`${id}.${i}`} key={`${id}.${i}`} />
+      <TreeComponent getPath={getPath} getColor={getColor} parentNode={node} node={c} id={`${id}.${i}`} key={`${id}.${i}`} />
     ))}
     <g transform={`translate(${node.y},${node.x})`}>
-      <circle r={4} style={{fill:"steelblue",stroke:'#ccc',strokeWidth:'1px'}}></circle>
-      <text dy={'0.35em'} x={-6} textAnchor={'end'} style={{font:'8px sans-serif'}}>{node.data.name}</text>
+      <Circ></Circ>
+      <text dy={'0.35em'} x={-6} textAnchor={'end'} style={{pointerEvents:'none',userSelect:'none',font:'8px sans-serif'}}>{node.data.name}</text>
     </g>
   </g>
 )}
-
 const TreeSVG = Svg(
   withItems(pipe(
-    from(({repoNodeOutEdges,repoNodes,id})=>{
+    from(({repoNodeOutEdges,repoNodes,id,repos})=>{
 
       repoNodes = fltrv(matches({repoid:id}))(repoNodes);
       const rootNodes = {...repoNodes};
@@ -287,36 +289,38 @@ const TreeSVG = Svg(
       treeLayout.y=0.1*height;
       const pathGen = d3.linkHorizontal();
       const getPath = (parent,node)=>pathGen({source:[node.y,node.x],target:[parent.y,parent.x]});
-      return {node:treeLayout,parentNode:treeLayout,id,getPath};
+      const getColor = pipe(
+        get('data.costPerChange'),
+        ifElse(isUndefined,()=>'#fff',getRedGenerator(repos[id].costPerChangeMin,repos[id].costPerChangeMax))
+      );
+      return {node:treeLayout,parentNode:treeLayout,id,getPath,getColor};
     }),
     toItemProps(TreeComponent)
   )),
   h('minw300px,minh300px')
 );
-// https://github.com/escomplex/escomplex/blob/master/METRICS.md
+
 
 
 
 // Rules
-// const ruleColor = getColor(0,4);
-// console.log(`ruleColor(0)`, ruleColor(0));
-console.log(`reds`, reds);
-const redStr = `nth1bgc${reds[4]},nth2bgc${reds[3]},nth3bgc${reds[2]},nth4bgc${reds[1]},nth5bgc${reds[0]}`;
-console.log(`redStr`, redStr);
 // const ChangeCostRuleHelp = Span(withItems(QMark),withModal(`change-cost-help`));
 // const ChangeCostRule = Span(withItems('ChangeCost',ChangeCostRuleHelp),h,hi);
-const CyclomaticRuleHelp = Span(withItems(QMark),withModal(`cyclomatic-help`));
-const CyclomaticRule = Span(withItems('Cyclomatic',CyclomaticRuleHelp),h,hi);
-const EffortRuleHelp = Span(withItems(QMark),withModal(`effort-help`));
-const EffortRule = Span(withItems('Effort',EffortRuleHelp),h,hi);
-const LocRuleHelp = Span(withItems(QMark),withModal(`loc-help`));
-const LocRule = Span(withItems('Loc',LocRuleHelp),h,hi);
-const MaintainabilityRuleHelp = Span(withItems(QMark),withModal(`maint-help`));
-const MaintainabilityRule = Span(withItems('Maintainability',MaintainabilityRuleHelp),h,hi);
-const ParamsRuleHelp = Span(withItems(QMark),withModal(`params-help`));
-const ParamsRule = Span(withItems('Params',ParamsRuleHelp),h,hi);
+const CyclomaticHelpText = Span(withItems(CYCLOMATIC_HELP),v('wsPL'));
+const CyclomaticRuleHelpTrigger = Span(withItems(QMark),withModal(`cyclomatic-help`,CyclomaticHelpText));
+const CyclomaticRule = Span(withItems('Cyclomatic',CyclomaticRuleHelpTrigger),h,hi);
+const EffortHelpText = Span(withItems(EFFORT_HELP),v('wsPL'));
+const EffortRuleHelpTrigger = Span(withItems(QMark),withModal(`effort-help`,EffortHelpText));
+const EffortRule = Span(withItems('Effort',EffortRuleHelpTrigger),h,hi);
+const LocRuleHelpTrigger = Span(withItems(QMark),withModal(`loc-help`));
+const LocRule = Span(withItems('Loc',LocRuleHelpTrigger),h,hi);
+const MaintainabilityHelpText = Span(withItems(MAINTAINABILITY_HELP),v('wsPL'));
+const MaintainabilityRuleHelpTrigger = Span(withItems(QMark),withModal(`maint-help`,MaintainabilityHelpText));
+const MaintainabilityRule = Span(withItems('Maintainability',MaintainabilityRuleHelpTrigger),h,hi);
+const ParamsRuleHelpTrigger = Span(withItems(QMark),withModal(`params-help`));
+const ParamsRule = Span(withItems('Params',ParamsRuleHelpTrigger),h,hi);
 const Rules = Div(
-  withItems('Rules',MaintainabilityRule,EffortRule,CyclomaticRule,ParamsRule,LocRule),
+  withItems('Rules',MaintainabilityRule,EffortRule,CyclomaticRule/*,ParamsRule,LocRule*/),
   v,vi('t0.8,mt0.5',
   `nth1bgc${reds[4]},nth2bgc${reds[3]},nth3bgc${reds[2]},nth4bgc${reds[1]},nth5bgc${reds[0]}`)
 );
@@ -325,63 +329,76 @@ const Rules = Div(
 
 
 // Metrics Grid Header Row
-const RulesImpactHelp = Span(withItems(QMark),withModal(`rules-impact-help`));
-const RulesImpact = Span(withItems('Rules Impact',RulesImpactHelp),h);
-const CostPerChangeHelp = Span(withItems(QMark),withModal(`cost-per-change-help`));
-const CostPerChange = Span(withItems('Cost per Change',CostPerChangeHelp),h);
-const UserImpactHelp = Span(withItems(QMark),withModal(`user-impact-help`));
-const UserImpact = Span(withItems('User Impact',UserImpactHelp),h);
+const RulesImpactText = Span(withItems(`How do this file's rules compare against repo max?`),v('wsPL'));
+const RulesImpactHelpTrigger = Span(withItems(QMark),withModal(`rules-impact-help`,RulesImpactText));
+const RulesImpact = Span(withItems('Rules Impact',RulesImpactHelpTrigger),h);
+const CostPerChangeText = Span(withItems(`(171-maintainability)/1000*devcost*changetime`),v('wsPL'));
+const CostPerChangeHelpTrigger = Span(withItems(QMark),withModal(`cost-per-change-help`,CostPerChangeText));
+const CostPerChange = Span(withItems('Cost per Change',CostPerChangeHelpTrigger),h);
+const UserImpactText = Span(withItems(`Just cyclomatic complexity for now.`),v('wsPL'));
+const UserImpactHelpTrigger = Span(withItems(QMark),withModal(`user-impact-help`,UserImpactText));
+const UserImpact = Span(withItems('User Impact',UserImpactHelpTrigger),h);
 const PathHeader = Span(withItems('Path'));
 
 
 // Metrics Grid Cells
 const GridCellRoundNum = Span(withItems(pipe(from('data'),round)));
-const GridCellPath = Span(withItems(pipe(from('repoNodes[id].path'),v=>v.replace(/^.+\//g,'...'))));
-const RulesImpactCell = Span(
-  withItems(pipe(
-    from('repoNodes[id]'),
-    ()=>{
-      // calc percentages compared to repo min/max
-      return [
-        Span(withProps({style:{width:'100%'}}))
-      ]
-    }
-
-    // 'bgcF', color!!
-  ))
+const GridCellPath = Span(withItems(pipe(from('repoNodes[id].path'),v=>v.replace(/^.+\//g,''))));
+const RulesImpactCell = Div(
+  withItems(from(({repoNodes,repos,id})=>{
+    const node = repoNodes[id];
+    const repo = repos[node.repoid];
+    const styles = /*sortBy('width')*/([// should generate these based on selected rules, but select/deselect nodes isn't implemented yet
+      {backgroundColor:reds[4],width:(node.maintainability/repo.maintainabilityMax)*100},
+      {backgroundColor:reds[3],width:(node.effort/repo.effortMax)*100},
+      {backgroundColor:reds[2],width:(node.cyclomatic/repo.cyclomaticMax)*100},
+      // {backgroundColor:reds[1],width:(node.params/repo.paramsMax)*100},
+      // {backgroundColor:reds[0],width:(node.loc/repo.locMax)*100},
+    ]);
+    return styles.map((s,i,c)=>{
+      const lastWidth = i===0 ? 0: c[i-1].width;
+      return Div(withProps({style:{...s,height:`${1/styles.length}em`,width:`${s.width}%`}}));
+    });
+  })),
+  // h,hi
 );
 const MetricsBody = Div(
   withItems(
-    RulesImpact,
     PathHeader,
+    RulesImpact,
     CostPerChange,
     UserImpact,
     pipe(
       from(({id,repoNodes})=>fltrvToArr(and(matches({repoid:id}),has('code')))(repoNodes)),
-      // values,
       sortBy('costPerChange'),
       a=>a.reverse(),
       a=>a.slice(0,10),
       mapv(converge([
-        ()=>RulesImpactCell,
         pipe(pick(['id']),toItemProps(GridCellPath)),
+        pipe(pick(['id']),toItemProps(RulesImpactCell)),
         pipe(get('costPerChange'),toDataProp,toItemProps(GridCellRoundNum)),
         pipe(get('userImpact'),toDataProp,toItemProps(GridCellRoundNum)),
       ]))
     )
   ),
   g('minw400px,w100%,lAIC'),
-  gi('nthn-+4mb1','nthn4-3w14%_mr1%,nthn4-2w49%_mr1%,nthn4-1w19%_mr1%,nthn4w14%_mr1%')
+  gi('mb.3,nthn-+4mb1','nthn4-3w19%_mr1%,nthn4-2w44%_mr1%,nthn4-1w19%_mr1%,nthn4w14%_mr1%')
 );
 
 
-const TimePerChangeHelp = Span(withItems(QMark),withModal('time-per-change-help'));
+
+
+// Dev Cost and Time Per Change Adjustments
+const TimePerChangeText = Span(withItems(TIME_PER_CHANGE_HELP),v('wsPL'));
+const TimePerChangeHelp = Span(withItems(QMark),withModal('time-per-change-help',TimePerChangeText));
 const TimePerChangeLabel = Label(withItems('Time Per Change'),h('t0.8'));
 const TimePerChange = TextInput(
   mapFrom({defaultValue:'repos[id].changetime',repoid:'id'}),
   pipeChanges(from('target.value'),toState('repos[repoid].changetime')),
   h('w3')
 );
+
+const DevCostPerHourText = Span(withItems(TIME_PER_CHANGE_HELP),v('wsPL'));
 const DevCostPerHourHelp = Span(withItems(QMark),withModal(`developers-hourly-rate`));
 const DevCostPerHourLabel = Label(withItems('Dev Hourly Cost'),h('t0.8'));
 const DevCostPerHour = TextInput(
