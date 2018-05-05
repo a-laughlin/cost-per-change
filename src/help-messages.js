@@ -1,31 +1,39 @@
 export const ABOUT_HELP = ``+
-`This is the about message, which needs content.
+`Some code patterns cost more to maintain than others. Quantifying them can be complex and time-consuming. This app helps software
+developers and managers quantify costs in any JavaScript Github repo visible to them.
 
+For early description and mockups, see:
+https://github.com/a-laughlin/cost-per-change/blob/master/src/description-and-mockups.pdf
 
-There are definitely some quirks:
+Metrics:
+Project uses escomplex for metrics. (https://github.com/escomplex/escomplex/)
+I tried making the implementation more pluggable and granular with eslint,
+but eslint is tightly coupled to the file system.
 
-Clicking links doesn't work.
+Implementation Quirks:
+- Clicking links in the modal doesn't work yet.
+- Recalculating metrics requires updating the url.
+- Cut/pasting the url works fine, but typing doesn't. Oddly.
 
-Recalculating metrics requires updating the url (cut/paste works fine).
-Typing in the url doesn't work, for some reason.
-
-Rule impacts need some thought to be more useful.
-Maybe comparing across repos.
-
-Show the code and/or more detailed metrics (probably in an iframe when files clicked).
-^ not sure if more details are actually valuable.
-Chances are you already know what's in the files (if they're your own).
-
-For more on metrics, see:
-https://github.com/escomplex/escomplex/blob/master/METRICS.md
+Additional Thoughts:
+- Rule impacts need some thought to be more useful.
+  Maybe comparing across repos?
+- Show the code and/or more detailed metrics (probably in an iframe when files clicked).
+  ^ Unsure how valuable more details are in practice. Feedback welcome.
 `;
+
 export const REPO_URL_HELP = `
-  Paste a repo path into this field.  The rest of the repo fields will recalculate from the
-  js/jsx/ts files in that repo.
+  Paste a repo directory path into this field.
+  The rest of the repo fields will recalculate
+  from the js/jsx/ts files in that repo.
 
-  You can copy and remove repos to compare them (buttons on the right);
-
-  Note, an auth token is required for the API request.  See the "Github Token" help.
+  Things to be aware of:
+  1. An auth token is required for the API request.  See the "Github Token" help.
+  2. You can copy and remove repos to compare them (buttons on the right);
+  3. Some repo directories don't work. I spent a lot of time trying to find ways
+      to make as many as possible work. If you find one that doesn't, you're
+      welcome to submit a PR. The relevant code is at:
+      https://github.com/a-laughlin/cost-per-change/blob/master/src/code-analysis.js#L32
 `;
 
 export const TIME_PER_CHANGE_HELP = ``+
