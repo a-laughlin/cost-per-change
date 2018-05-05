@@ -124,8 +124,7 @@ const TokenHelpLink = A(
 const TokenHelpMsg = Span(withItems('Get Token at: ',TokenHelpLink,` (sorry that clicking links in the modal doesn't work yet)`));
 const TokenHelp = Span(withItems(QMark),withModal('token-help',TokenHelpMsg));
 const ruleLink = 'https://github.com/escomplex/escomplex/blob/master/METRICS.md';
-const RulesDocumentationLink = A(withProps({href:ruleLink,target:'blank'}),withItems(ruleLink));
-const AboutModal = P(withItems( ABOUT_HELP, RulesDocumentationLink ), v('w100%,wsPL,peN'));
+const AboutModal = P(withItems(ABOUT_HELP), v('w100%,wsPL,peN'));
 const About = Span(withItems('About'),withModal('about', AboutModal));
 const TokenArea = Div(shouldUpdate(stubFalse),
   withItems(Label(withItems('GitHub Token')),TokenHelp,TokenTextContainer,About),
@@ -403,8 +402,8 @@ const TimePerChange = TextInput(
   h('w3')
 );
 
-const DevCostPerHourText = Span(withItems(TIME_PER_CHANGE_HELP),v('wsPL'));
-const DevCostPerHourHelp = Span(withItems(QMark),withModal(`developers-hourly-rate`));
+const DevCostPerHourText = Span(withItems(`Developer Hourly Rate, to calculate cost per change.`),v('wsPL'));
+const DevCostPerHourHelp = Span(withItems(QMark),withModal(`developers-hourly-rate`,DevCostPerHourText));
 const DevCostPerHourLabel = Label(withItems('Dev Hourly Cost'),h('t0.8'));
 const DevCostPerHour = TextInput(
   mapFrom({defaultValue:'repos[id].devcost',repoid:'id'}),
