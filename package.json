@@ -1,0 +1,33 @@
+{
+  "name": "cost-per-change",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "@babel/preset-env": "^7.0.0-beta.46",
+    "@babel/preset-env-standalone": "^7.0.0-beta.46",
+    "@babel/preset-react": "^7.0.0-beta.46",
+    "@babel/preset-typescript": "^7.0.0-beta.46",
+    "@babel/standalone": "^7.0.0-beta.46",
+    "d3": "^4.13.0",
+    "d3-scale-chromatic": "^1.2.0",
+    "escomplex": "git@github.com:a-laughlin/escomplex.git",
+    "lodash-fp": "^0.10.4",
+    "react": "^16.2.0",
+    "react-dom": "^16.2.0",
+    "react-scripts": "1.1.1",
+    "recompose": "^0.26.0",
+    "styletron": "^3.0.4",
+    "styletron-utils": "^3.0.4",
+    "xstream": "^11.2.0"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test --env=jsdom",
+    "eject": "react-scripts eject"
+  },
+  "devDependencies": {
+    "eslint": "^4.19.1"
+  },
+  "homepage":"."
+}

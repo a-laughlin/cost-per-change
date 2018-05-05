@@ -1,0 +1,23 @@
+name,data_type,attribute_type1,attribute_type2,attribute_type3,description
+file_name,attribute,ordered,sequential,,self-explanatory
+rule_name,attribute,ordered,sequential,,"eslint rules used to parse code, customized to output changeability and reliability metrics. For more about eslint and rules, see https://eslint.org/docs/about/"
+file_affected_locations,position,,,,locations in file where code triggered rule
+repo_affected_locations,position,,,,locations in repo where code triggered rule
+file_lines_count,attribute,ordered,sequential,quantitative,total lines of code in file
+repo_lines_count,attribute,ordered,sequential,quantitative,total lines of code in repo
+file_lines_affected_count,attribute,ordered,sequential,quantitative,total lines of file where code triggers rule
+repo_lines_affected_count,attribute,ordered,sequential,quantitative,total lines of repo files where code triggers rule
+file_lines_affected_percent,attribute,ordered,sequential,quantitative,file_lines_affected_count / file_lines_count
+repo_lines_affected_percent,attribute,ordered,sequential,quantitative,repo_lines_affected_count / repo_lines_count
+cost_per_hour,item,,,,user-estimated developer cost per hour
+hours_per_change,item,,,,user-estimated person-hours required to go from code change decision to production code deployed
+rule_reliability_per_line,attribute,ordered,sequential,quantitative,estimated amount of reliability lost (i.e. non-determinism introduced) by this rule affecting one line
+rule_changeability_per_line,attribute,ordered,sequential,quantitative,"Hours per change multiplier.  Estimated amount changeability (aka modifiability, maintainability, flexibility) lost by this rule affecting one line."
+file_reliability,attribute,ordered,sequential,quantitative,"total file reliability metric, calculation tbd... something like map(rules => rule_reliability_per_line * rule_lines_affected / file_lines_count )).sum()"
+repo_reliability,attribute,ordered,sequential,quantitative,sum of file reliabilities / total file count
+file_changeability,attribute,ordered,sequential,quantitative,"total file changeability metric, calculation tbd... something like map(rules => rule_changeability_per_line * rule_lines_affected / file_lines_count )).sum()"
+repo_changeability,attribute,ordered,sequential,quantitative,sum of file changeabilities / total file count
+file_user_impact,attribute,ordered,sequential,quantitative,1 - file_reliability
+repo_user_impact,attribute,ordered,sequential,quantitative,1 - repo_reliability
+file_cost_per_change,attribute,ordered,sequential,quantitative,tbd... something like file_changeability * cost_per_hour * hours_per_change
+repo_cost_per_change,attribute,ordered,sequential,quantitative,tbd... something like repo_changeability * cost_per_hour * hours_per_change
