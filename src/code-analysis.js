@@ -1,40 +1,31 @@
-// import * as d3 from 'd3'
-// import {
-//   filter,isObjectLike,flatten,ensureArray,pipe,get
-// } from './utils.js';
-
 import {analyse as ana} from 'escomplex';
-// import * as babelEnv from '@babel/preset-env-standalone';
+import * as plug from '@babel/plugin-proposal-object-rest-spread';
 import * as babel from '@babel/standalone';
-// console.log(`babelEnv`, babelEnv);
+
 const babelPresetTransforms = {
-  es2015:(text)=>babel.transform(text, { presets: ['es2015'] }).code,
-  es2017:(text)=>babel.transform(text, { presets: ['es2017'] }).code,
-  react:(text)=>babel.transform(text, { presets: ['react'] }).code,
-  typescript:(text)=>babel.transform(text, { presets: ['typescript'] }).code,
+  // 2015 mangles the code more - need to think through when to do that for consistency across files.
+  // env might mangle it too.  Need to check.
+  // Actually...
+  // Could just do one setting with all the presets....  Trade maximum mangling for consistent result
+  // metrics across repos.  Would also simplify this code significantly.
+  es2015:(text)=>babel.transform(text, {presets:['es2017','es2016','es2015'],plugins:[plug]}).code,
+  es2017:(text)=>babel.transform(text, { presets: ['es2017'], plugins: [plug]}).code,
+  env:(text)=>babel.transform(text, {presets:['env'],plugins:[plug]}).code,
+  react:(text)=>babel.transform(text, { presets: ['react'],plugins: [plug] }).code,
+  typescript:(text)=>babel.transform(text, { presets: ['typescript'],plugins: [plug] }).code,
 };
 
 const fileTypeToPresetMap = {
-  // js:babelPresetTransforms.es2017,
   jsx:babelPresetTransforms.react,
   ts:babelPresetTransforms.typescript,
 };
 
-const identity = x=>x;
-export const transpile = (pathStr,codeStr)=>{
-  // I can't figure out how to get the babel-preset-env working to handle es6 modules directly.
-  // This is a really nasty workaround, but it seems to cover es6 modules, and classes in regular js files.
-  // It's probably going to make code using es6 modules seem more complex than it is...
-};
-
-// import {composeWalker,extension} from './composeWalker'
-// import {parseScript,parseModule} from 'esprima'
 export const analyse = (pathStr,codeStr)=>{
   let analysis;
   let code;
   try{code=codeStr; analysis = ana(code,{noCoreSize:true}); }
   catch(e){
-    try { code=fileTypeToPresetMap[pathStr.replace(/^.+\./,'')](codeStr);analysis = ana(code,{noCoreSize:true}); }
+    try {code=fileTypeToPresetMap[pathStr.replace(/^.+\./,'')](codeStr);analysis = ana(code,{noCoreSize:true});}
     catch (ee) {
       try{code = babelPresetTransforms.react(codeStr);analysis = ana(code,{noCoreSize:true});}
       catch(eee){
@@ -42,22 +33,26 @@ export const analyse = (pathStr,codeStr)=>{
         catch(eeee){
           try{code = babelPresetTransforms.es2017(codeStr);analysis = ana(code,{noCoreSize:true});}
           catch(eeeee){
-            try{code = babelPresetTransforms.es2015(codeStr);analysis = ana(code,{noCoreSize:true});}
+            try{code = babelPresetTransforms.envZZz(codeStr);analysis = ana(code,{noCoreSize:true});}
             catch(eeeeee){
-              code = `
-                /*
-                Error: cannot analyse ${pathStr} because at least 6 errors.
-                1. ${e.message}
-                2. ${ee.message}
-                3. ${eee.message}
-                4. ${eeee.message}
-                5. ${eeeee.message}
-                6. ${eeeeee.message}
-                */
-              `;
-              console.log(`code`, code);
-              // return valid to keep the app from choking
-              analysis = ana(`/* Too many errors. Aborted. See console log. */`,{noCoreSize:true});
+              try{code = babelPresetTransforms.es2015(codeStr);analysis = ana(code,{noCoreSize:true});}
+              catch(eeeeeee){
+                code = `
+                  /*
+                  Error: cannot analyse ${pathStr} because at least 7 errors.
+                  1. ${e.message}
+                  2. ${ee.message}
+                  3. ${eee.message}
+                  4. ${eeee.message}
+                  5. ${eeeee.message}
+                  6. ${eeeeee.message}
+                  7. ${eeeeeee.message}
+                  */
+                `;
+                console.log(`code`, code);
+                // return valid to keep the app from choking
+                analysis = ana(`/* Too many errors. Aborted. See console log. */`,{noCoreSize:true});
+              }
             }
           }
         }
