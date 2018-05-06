@@ -44,8 +44,20 @@ export const analyse = (pathStr,codeStr)=>{
           catch(eeeee){
             try{code = babelPresetTransforms.es2015(codeStr);analysis = ana(code,{noCoreSize:true});}
             catch(eeeeee){
-              code = `'//Error: cannot analyse ${pathStr} because at least 6 errors.'`;
-              analysis = ana(code,{noCoreSize:true})
+              code = `
+                /*
+                Error: cannot analyse ${pathStr} because at least 6 errors.
+                1. ${e.message}
+                2. ${ee.message}
+                3. ${eee.message}
+                4. ${eeee.message}
+                5. ${eeeee.message}
+                6. ${eeeeee.message}
+                */
+              `;
+              console.log(`code`, code);
+              // return valid to keep the app from choking
+              analysis = ana(`/* Too many errors. Aborted. See console log. */`,{noCoreSize:true});
             }
           }
         }
