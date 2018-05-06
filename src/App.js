@@ -90,9 +90,15 @@ const Modal = Div(
   h('posF,left0px,top-1000px,w100%,h100%,lJCC,lAIC'),hi
 );
 const withModal = (msgKey,MsgComponent) => {
-  modalComponents[msgKey]||(modalComponents[msgKey]=isString(MsgComponent)?Span(withItems(MsgComponent)):MsgComponent);
   return compose(
-    pipeClicks(({target})=>({msgKey,id:'0'}), toState('helpMessages.0')),
+    pipeClicks(
+      (...args)=>{
+        const key = ensureFunction(msgKey)(...args);
+        modalComponents[key]||(modalComponents[key]=isString(MsgComponent)?Span(withItems(MsgComponent)):MsgComponent);
+        return ({msgKey:key,id:'0'})
+      },
+      toState('helpMessages.0')
+    ),
     v('crP')
   );
 }
@@ -249,15 +255,16 @@ const RepoHeader = Div(
 
 
 // Repo File Tree
-
 const TreeComponent = (props)=>{
   const {node,parentNode,id,getPath,getColor,[statePublishKey]:pub} = props;
   // lots of hackiness here to pass the state publish key prop
+  // calculating things like node color is much cleaner with streams. - no coupling functions multiple levels deep
+  // really dislike passing props through.  Ugly dependency graphs.
+  // NOTE TO SELF - don't try passing props to the modal component.  Already spent hours trying to
+  // debug that.  Just fix when updating with streams - subscribe the modal to circle clicks.
   const Circ = Circle(
-    withProps(({style={}})=>({
-      // [statePublishKey]:pub,
-      r:4,style:{...style,fill:getColor(node),stroke:'#ccc',strokeWidth:'1px'}})),
-    withModal(id,Pre(withItems(node.data.name))),
+    mapFrom(({getColor,style={}})=>({r:4,style:{...style,fill:getColor(node),stroke:'#ccc',strokeWidth:'1px'}})),
+    withModal(from('id'),Pre(withItems(`file click functionality not implemented yet`))),
   );
   return (
   <g key={id}>
@@ -269,7 +276,7 @@ const TreeComponent = (props)=>{
       <TreeComponent {...props} parentNode={node} node={c} id={`${id}.${i}`} key={`${id}.${i}`} />
     ))}
     <g transform={`translate(${node.y},${node.x})`}>
-      <Circ/>
+      <Circ {...props} id={node.data.id} />
       <text dy={'0.35em'} x={-6} textAnchor={'end'} style={{pointerEvents:'none',userSelect:'none',font:'8px sans-serif'}}>{node.data.name}</text>
     </g>
   </g>
@@ -284,7 +291,6 @@ const TreeSVG = Svg(
         delete rootNodes[edgeKey];
         return repoNodes[edgeKey];
       }))(repoNodeOutEdges);
-
 
       // map nodes to tree object with parent, children, height, depth properties
       const treeObj = d3.hierarchy(Object.values(rootNodes)[0]||{},n=>adjList[n.id]);
