@@ -90,7 +90,8 @@ const repoPathToQueryParts = (repoPath)=>{
 };
 
 const hasCode = (node)=>node.text!==undefined;
-const isJsFileOrDirectory = n=>n.type==='tree'||/\.jsx?$/.test(n.name)
+const validFileExtensions = /\.js$|\.jsx$|\.ts$/;
+const isJsFileOrDirectory = n=>n.type==='tree'||validFileExtensions.test(n.name)
 export const asyncRepoUrlToGraph = ({id,url,token})=>{
   const {author,repo,branch,path}=repoPathToQueryParts(url);
   return composeBFWalkerAsync([
