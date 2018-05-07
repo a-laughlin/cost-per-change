@@ -5,7 +5,7 @@ import Styletron from 'styletron-client';
 import {injectStyle} from 'styletron-utils';
 import {createElement,Children,cloneElement} from 'react';
 import {split,ifElse,argsToArray,transform,isPlainObject,rangeStep,identity,isString,isFunction,
-  pipe,pick,map,mergeAll,fltrv,isProductionEnv,mapvToArr,mapv,plog,is,not,omitv} from './utils';
+  pipe,mergeAll,isProductionEnv,mapv,plog,is,omitv,union} from './utils';
 import { isComponentString, isComponent, mergeableHocFactory } from './hoc-utils'
 // convert to get both val and key
 /* eslint-disable no-unused-vars */
@@ -22,10 +22,14 @@ export const parseStyleString = (()=>{
         ?`#${num}`
         :`${num}${unit}`
   );
-  const parser = (s,[_,prefix,num,unit]=s.match(styleMatcher))=>{
-    return prefixes[prefix](num,unit);
-  }
-  const getCachedOrParseThenCache = (str)=>cache[str] || (cache[str]=parser(str));
+  const parser = (s,[_,prefix,num,unit]=s.match(styleMatcher))=>prefixes[prefix](num,unit);
+  const getCachedOrParseThenCache = pipe(
+    split(' '),
+    omitv(is('')),
+    mapv( str =>cache[str] || (cache[str]=parser(str)) ),
+    mergeAll
+  );
+
   const nestedSplitter = /\_/g;
   const prefixes ={
     left:getSizeObj('left'),
@@ -246,7 +250,7 @@ export const parseStyleString = (()=>{
   cache.lGridItem = {
     ...cache.lHorizontalItem,
   };
-  return pipe( split(','),omitv(is('')),mapv(getCachedOrParseThenCache), mergeAll);
+  return getCachedOrParseThenCache;
 })();
 // check cached combos, check constants,run getPrefix:getSuffix
 
@@ -284,9 +288,7 @@ const rejectInvalidListStyles = validityTest('list',{
   flexBasis:1,flex:1,flexGrow:1,flexShrink:1,
   pointerEvents:1,overflow:1
 });
-const rejectInvalidListItemStyles = validityTest('listItems',{
-  alignItems:1,alignContent:1,justifyContent:1,display:'inline-flex'
-});
+const rejectInvalidListItemStyles = validityTest('listItems',{});
 
 /**
  * withStyles && withItemContextStyles
@@ -304,6 +306,9 @@ export const onItemPropsPassedInline = (merged,props)=>{
 // styletron adapter
 const styletron = new Styletron();
 export const styleObjectToClasses = stylesObj=>injectStyle(styletron, stylesObj);
+// BUG the class merge doesn't remove classes,
+// so conditional styles with a second hoc wrapping will only add more styles, not be conditional
+// const classUnion = (c1,c2)=>union((c1+c2).split(' '));
 export const onPropsPassedStyletron = (merged,props)=>({...props,className:`${props.className||''} ${styleObjectToClasses(merged)||''}`});
 export const onItemPropsPassedStyletron = (merged,props)=>{
   if(!props.children||props.children.length===0){return props;}

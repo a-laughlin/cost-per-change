@@ -84,10 +84,10 @@ const Modal = Div(
     from('helpMessages.0'),
     ifElse(isUndefined,()=>stubNull,({msgKey})=>Div(
       withItems(modalComponents[msgKey]||`No Help Message with key "${msgKey}".`),
-      withStyles(`posF,top80px,p.5,dB,wAuto,minw3,minh3,bgcF,z1000,b1px,bcC,bSolid,brad10px,crD`,{boxShadow:'0px 0px 205px 7px #777'})
+      withStyles(`posF top80px p.5 dB wAuto minw3 minh3 bgcF z1000 b1px bcC bSolid brad10px crD`,{boxShadow:'0px 0px 205px 7px #777'})
     ))
   )),
-  h('posF,left0px,top-1000px,w100%,h100%,lJCC,lAIC'),hi
+  h('posF left0px top-1000px w100% h100% lJCC lAIC'),hi
 );
 const withModal = (msgKey,MsgComponent) => {
   return compose(
@@ -107,8 +107,8 @@ const withModal = (msgKey,MsgComponent) => {
 
 // Random Util Element
 const QMark = Span(withItems('?'),
-  h('lAIC,lACC,crP,peN,dIF,usN','tvaM,t.4,lh1.3,tcC',
-  'p0,pl.3,pr.3','b1x,bSolid,brad50%,bcC','ml.5,mr.5'),
+  h('lAIC lACC crP peN dIF usN','tvaM t.4 lh1.3 tcC',
+  'p0 pl.3 pr.3','b1x bSolid brad50% bcC','ml.5 mr.5'),
 );
 
 
@@ -118,7 +118,7 @@ const QMark = Span(withItems('?'),
 const TokenTextInput = TextInput(
   mapFrom({defaultValue:'userTokens.0.value'}),
   pipeChanges(from('target.value'),toState('userTokens.0.value')),
-  h('w40,b0,bb1x,bcD')
+  h('w40 b0 bb1x bcD')
 );
 const TokenTextContainer = Div(withItems(passIdTo(TokenTextInput)),h('lGrow1'));
 const TokenHelpLink = A(
@@ -128,11 +128,11 @@ const TokenHelpLink = A(
 const TokenHelpMsg = Span(withItems('Get Token at: ',TokenHelpLink,` (sorry that clicking links in the modal doesn't work yet)`));
 const TokenHelp = Span(withItems(QMark),withModal('token-help',TokenHelpMsg));
 const ruleLink = 'https://github.com/escomplex/escomplex/blob/master/METRICS.md';
-const AboutModal = P(withItems(ABOUT_HELP), v('w100%,wsPL,peN'));
+const AboutModal = P(withItems(ABOUT_HELP), v('w100% wsPL peN'));
 const About = Span(withItems('About'),withModal('about', AboutModal));
 const TokenArea = Div(shouldUpdate(stubFalse),
   withItems(Label(withItems('GitHub Token')),TokenHelp,TokenTextContainer,About),
-  h('w100%'),hi('nth3mrAuto,first:ml.5,last:mr.5'),
+  h('w100%'),hi('nth3mrAuto first:ml.5 last:mr.5'),
 );
 
 
@@ -201,7 +201,7 @@ const RepoUrlInput = TextInput(
     mapv(assignAll),
     assignToState, // requires pipeAllArgs to get the publish key... can fix with observables and store publish fn.
   ),
-  h('t1em,w100%,b0,bb1x')
+  h('t1em w100% b0 bb1x')
 );
 
 const RepoUrlHelpText = Span(withItems(REPO_URL_HELP),v('wsPL'));
@@ -247,7 +247,7 @@ const RepoHeader = Div(
     RepoUrlHelpTrigger,
     passIdTo(RepoUrlContainer,RemRepoButton,CopyRepoButton)
   ),
-  h('w100%,b0,bt1x,bSolid,bcD,brad10x'),hi('ml.5,mr.5,mt.5')
+  h('w100% b0 bt1x bSolid bcD brad10x'),hi('ml.5 mr.5 mt.5')
 );
 
 
@@ -309,7 +309,7 @@ const TreeSVG = Svg(
     }),
     toItemProps(TreeComponent)
   )),
-  h('minw300px,minh300px')
+  h('minw300px minh300px')
 );
 
 
@@ -333,8 +333,8 @@ const ParamsRuleHelpTrigger = Span(withItems(QMark),withModal(`params-help`));
 const ParamsRule = Span(withItems('Params',ParamsRuleHelpTrigger),h,hi);
 const Rules = Div(
   withItems('Rules',MaintainabilityRule,EffortRule,CyclomaticRule/*,ParamsRule,LocRule*/),
-  v,vi('t0.8,mt0.5',
-  `nth1bgc${reds[4]},nth2bgc${reds[3]},nth3bgc${reds[2]},nth4bgc${reds[1]},nth5bgc${reds[0]}`)
+  v,vi('t0.8 mt0.5',
+  `nth1bgc${reds[4]} nth2bgc${reds[3]} nth3bgc${reds[2]} nth4bgc${reds[1]} nth5bgc${reds[0]}`)
 );
 
 
@@ -393,8 +393,8 @@ const MetricsBody = Div(
       ]))
     )
   ),
-  g('minw400px,w100%,lAIC'),
-  gi('mb.3,nthn-+4mb1','nthn4-3w19%_mr1%,nthn4-2w44%_mr1%,nthn4-1w19%_mr1%,nthn4w14%_mr1%')
+  g('minw400px w100% lAIC'),
+  gi('mb.3 nthn-+4mb1','nthn4-3w19%_mr1% nthn4-2w44%_mr1% nthn4-1w19%_mr1% nthn4w14%_mr1%')
 );
 
 
@@ -433,14 +433,14 @@ const RepoMetrics = Div(withItems('TODO'));
 const Repo = Div(
   shouldUpdate((p,n)=>p.repos[p.id].url !== n.repos[n.id].url),
   withItems(passIdTo(TreeSVG,Rules,FileMetrics)),
-  h('lAIStretch'),hi('nth1mr1,nth2mr1')
+  h('lAIStretch'),hi('nth1mr1 nth2mr1')
 );
 const RepoList = Div(withItems(pipe(from('repos'),mapIdsToItemProps(RepoHeader,Repo))),v,vi('mb.5'));
 
 
 // Header
 const AppLogo = Img(shouldUpdate(stubFalse),withProps({ src:logo, alt:'Cost Per Change Logo'}));
-const AppHeader = Header(shouldUpdate(stubFalse),withItems(AppLogo), h('lAIC,lJCC,bgF,w100%'), hi('h80x') );
+const AppHeader = Header(shouldUpdate(stubFalse),withItems(AppLogo), h('lAIC lJCC bgF w100%'), hi('h80x') );
 
 
 
