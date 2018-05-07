@@ -23,13 +23,15 @@ export const parseStyleString = (()=>{
         :`${num}${unit}`
   );
   const parser = (s,[_,prefix,num,unit]=s.match(styleMatcher))=>prefixes[prefix](num,unit);
+
+  const styleSeparator = ' ';
   const getCachedOrParseThenCache = pipe(
-    split(' '),
+    split(styleSeparator),
     omitv(is('')),
     mapv( str =>cache[str] || (cache[str]=parser(str)) ),
     mergeAll
   );
-
+  const parseNested = str=>parseStyleString(str.replace(nestedSplitter,styleSeparator))
   const nestedSplitter = /\_/g;
   const prefixes ={
     left:getSizeObj('left'),
@@ -72,7 +74,7 @@ export const parseStyleString = (()=>{
     bgc:(num,unit)=>({backgroundColor:parseColor(num,unit)}),//text color
 
     /* pseudoclasses: requires some lib (e.g., styletron) that converts styles to an actual stylesheet */
-    nth:(num,unit)=>({[`:nth-child(${num})`]:parseStyleString(unit.replace(nestedSplitter,','))}),
+    nth:(num,unit)=>({[`:nth-child(${num})`]:parseNested(unit)}),
     // select = 6 nth6
     // select >=6 nthn1+6
     // select <=6 nthn-+6
@@ -80,17 +82,17 @@ export const parseStyleString = (()=>{
     // select odds nthn2-1
     // select every 4th,starting at 1 nthn4+1
     // select second to last (not implemented) nth-last-child(2)
-    nthn:(num,unit)=>({[`:nth-child(${num[0]}n${num.slice(1)})`]:parseStyleString(unit.replace(nestedSplitter,','))}),
-    before:(num,unit)=>({':before':parseStyleString(unit.replace(nestedSplitter,','))}),
-    after:(num,unit)=>({':after':parseStyleString(unit.replace(nestedSplitter,','))}),
-    first:(num,unit)=>({':first-child':parseStyleString(unit.replace(nestedSplitter,','))}),
-    last:(num,unit)=>({':last-child':parseStyleString(unit.replace(nestedSplitter,','))}),
-    link:(num,unit)=>({':link':parseStyleString(unit.replace(nestedSplitter,','))}),
-    visited:(num,unit)=>({':visited':parseStyleString(unit.replace(nestedSplitter,','))}),
-    hover:(num,unit)=>({':hover':parseStyleString(unit.replace(nestedSplitter,','))}),
-    active:(num,unit)=>({':active':parseStyleString(unit.replace(nestedSplitter,','))}),
-    above:(num,unit)=>({[`@media (min-width: ${num-1}px)`]:parseStyleString(unit.replace(nestedSplitter,','))}),
-    below:(num,unit)=>({[`@media (max-width: ${num}px)`]:parseStyleString(unit.replace(nestedSplitter,','))}),
+    nthn:(num,unit)=>({[`:nth-child(${num[0]}n${num.slice(1)})`]:parseNested(unit)}),
+    before:(num,unit)=>({':before':parseNested(unit)}),
+    after:(num,unit)=>({':after':parseNested(unit)}),
+    first:(num,unit)=>({':first-child':parseNested(unit)}),
+    last:(num,unit)=>({':last-child':parseNested(unit)}),
+    link:(num,unit)=>({':link':parseNested(unit)}),
+    visited:(num,unit)=>({':visited':parseNested(unit)}),
+    hover:(num,unit)=>({':hover':parseNested(unit)}),
+    active:(num,unit)=>({':active':parseNested(unit)}),
+    above:(num,unit)=>({[`@media (min-width: ${num-1}px)`]:parseNested(unit)}),
+    below:(num,unit)=>({[`@media (max-width: ${num}px)`]:parseNested(unit)}),
   }
   const units={
     '':'em',
@@ -252,6 +254,8 @@ export const parseStyleString = (()=>{
   };
   return getCachedOrParseThenCache;
 })();
+console.log(`parseStyleString('mr1%')`, parseStyleString('mr1%'));
+console.log(`parseStyleString(nthn4-3w19%_mr1%)`, parseStyleString('nthn4-3w19%_mr1%'));
 // check cached combos, check constants,run getPrefix:getSuffix
 
 /**
