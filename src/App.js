@@ -35,7 +35,7 @@ import {
 
 // plus a few shorthands for lists vertical, horizontal, and grid HOCs
 import {v,h,g,vi,hi,gi,withStyles} from './styles.js';
-
+import * as xs from './xstream-fp'
 import {
   ABOUT_HELP,REPO_URL_HELP,TIME_PER_CHANGE_HELP,CYCLOMATIC_HELP, MAINTAINABILITY_HELP,EFFORT_HELP
 } from './help-messages.js';
