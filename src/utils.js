@@ -184,7 +184,7 @@ const pipeAsyncFactory = (catchFn)=>(firstFn,...fns)=>(firstInput,...args)=>{ //
 //  enables aborting
 //  Works with lodash/fp out of the box
 //
-export const reverse = arr=>arr.reverse();
+export const reverse = arr=>arr.slice(0).reverse(); // immutable array reverse
 export const pipe = (fn1=identity,...fns)=>(arg1,...args)=>fns.reduce((a,f)=>f(a),fn1(arg1,...args));
 export const pipeAsync = (fn1=identity,...fns)=>pipeAllArgsAsync(fn1,...fns.map(arity1));
 export const compose = (...fns)=>pipe(...fns.reverse());
