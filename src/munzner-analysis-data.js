@@ -10,7 +10,7 @@ const attributeTypes = {
     sequential:{id:'sequential',attributeTypes:[],'operations':['encode','manipulate','facet','reduce']},
     diverging:{id:'diverging',attributeTypes:[],'operations':['encode','manipulate','facet','reduce']},
     cyclic:{id:'cyclic',attributeTypes:[],'operations':['encode','manipulate','facet','reduce']},
-  stability:{id:'stability',attributeTypes:['static','dynamic'],'operations':[]}
+  stability:{id:'stability',attributeTypes:['static','dynamic'],'operations':[]},
     static:{id:'static',attributeTypes:[],'operations':['encode','manipulate']},
     dynamic:{id:'dynamic',attributeTypes:[],'operations':['encode','manipulate']},
 };
@@ -98,15 +98,15 @@ const operations={
         frequency:{id:'frequency',operations:[]},
       shape:{id:'shape',operations:[]},
   manipulate:{id:'manipulate',operations:['change','select','navigate']},
-    change:{id:'change',operations:[]}
-    select:{id:'select',operations:[]}
-    navigate:{id:'navigate',operations:[]}
+    change:{id:'change',operations:[]},
+    select:{id:'select',operations:[]},
+    navigate:{id:'navigate',operations:[]},
   facet:{id:'facet',operations:['juxtapose','partition','superimpose']},
-    juxtapose:{id:'juxtapose',operations:[]}
-    partition:{id:'partition',operations:[]}
-    superimpose:{id:'superimpose',operations:[]}
+    juxtapose:{id:'juxtapose',operations:[]},
+    partition:{id:'partition',operations:[]},
+    superimpose:{id:'superimpose',operations:[]},
   reduce:{id:'reduce',operations:['filter','aggregate','embed']},
-    filter:{id:'filter',operations:[]}
-    aggregate:{id:'aggregate',operations:[]}
+    filter:{id:'filter',operations:[]},
+    aggregate:{id:'aggregate',operations:[]},
     embed:{id:'embed',operations:[]}
 }
