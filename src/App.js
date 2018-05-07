@@ -171,7 +171,6 @@ const RepoUrlInput = TextInput(
               if(!node.code||node.hasOwnProperty('costPerChange')){return node;}
               const {analysis,code} = analyse(node.path,node.code);
               const n = {...node,code};
-              console.log(`analysis ${n.id}`, analysis);
               mapv((v,k)=>{
                 if(!isNumber(v)){return;}
                 minKey = `${k}Min`;
