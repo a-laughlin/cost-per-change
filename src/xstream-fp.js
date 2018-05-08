@@ -1,5 +1,5 @@
 
-import * as xstream from 'xstream';
+import xstream from 'xstream';
 import concat from 'xstream/extra/concat';
 import fromDiagram from 'xstream/extra/fromDiagram';
 import fromEvent from 'xstream/extra/fromEvent';
@@ -12,13 +12,12 @@ import dropUntil from 'xstream/extra/dropUntil';
 import flattenConcurrently from 'xstream/extra/flattenConcurrently';
 import flattenSequentially from 'xstream/extra/flattenSequentially';
 import pairwise from 'xstream/extra/pairwise';
-import sampleCombine from 'xstream/extra/sampleCombine';
+import combine from 'xstream/extra/sampleCombine';
 import split from 'xstream/extra/split';
 import throttle from 'xstream/extra/throttle';
 
 // export the base obj for factories
-export default xstream;
-console.log(`xstream`, xstream);
+export const xs = xstream;
 // factories:
 
 // Methods/Operators
@@ -32,7 +31,7 @@ export const debug = (...a)=>s=>s.debug(...a);
 export const drop = (...a)=>s=>s.drop(...a);
 export const endWhen = (...a)=>s=>s.endWhen(...a);
 export const filter = (...a)=>s=>s.filter(...a);
-export const flatten = (...a)=>s=>s.flatten(...a);
+export const flatten = s=>s.flatten();
 export const fold = (...a)=>s=>s.fold(...a); // - returns MemoryStream
 export const imitate = (...a)=>s=>s.imitate(...a); // imitates any non-Memory Stream
 export const last = (...a)=>s=>s.last(...a);
@@ -65,8 +64,8 @@ export {
   flattenConcurrently,
   flattenSequentially,
   pairwise,
-  sampleCombine,
   split,
   throttle,
 };
+export const sampleCombine = (stream,...streams)=>stream.compose(combine(...streams));
 export const withLatestFrom = sampleCombine;

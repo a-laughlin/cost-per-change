@@ -18,7 +18,7 @@ import {
 
 import {
   mapProps as rcMap,withProps,shouldUpdate as rcShouldUpdate,setObservableConfig,
-  componentFromStream,createEventHandler,
+  componentFromStream,createEventHandler,mapPropsStream
 } from 'recompose';
 import { analyse} from './code-analysis';
 import {initialState} from './initial-state';
@@ -41,15 +41,8 @@ import {
   ABOUT_HELP,REPO_URL_HELP,TIME_PER_CHANGE_HELP,CYCLOMATIC_HELP, MAINTAINABILITY_HELP,EFFORT_HELP
 } from './help-messages.js';
 
-// streams (there are a number of cases in the code where these separate concerns better)
-// import xstreamConfig from 'recompose/xstreamObservableConfig';
-// setObservableConfig(xstreamConfig);
-// event.merge(store).merge(sideload).merge(props).dostuff().to(store$).publish()
-// const isClickedProducer$ = Producer();
-// map(merge(props$,isClicked$,store$)));
-// streamClicks(merge(event$,props$,state$),dostuff,to$(isClickedProducer$,state$)))) // publishes an observable to store
-// event.merge(storeInfo).select(storeSlice).map(toNextSlice).merge(storeInfo).publish()
-
+import {repos_devcost$, to_repos_devcost$,mapCollectionStream} from './dataflow.js';
+import {map,sampleCombine,flatten} from './xstream-fp.js';
 
 
 
@@ -419,6 +412,11 @@ const DevCostPerHour = TextInput(
   pipeChanges(from('target.value'),toState('repos[repoid].devcost')),
   h('w3')
 );
+// const DevCostPerHour = TextInput(
+//   mapCollectionStream({defaultValue:repos_devcost$}),
+//   pipeChanges(from({value:'target.value',data:'id'}),to_repos_devcost$),
+//   h('w3')
+// );
 const MetricsParams = Div(withItems(pipe(from(['id']),toItemProps(
   TimePerChangeLabel, TimePerChangeHelp, TimePerChange,
   DevCostPerHourLabel, DevCostPerHourHelp, DevCostPerHour,
