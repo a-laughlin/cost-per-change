@@ -323,15 +323,14 @@ export const concatBefore = getMatchReplacer((predicate,getReplacement)=>collect
 
 
 // Objects
-export const polyGet = cond([
+const pgetFactory = recurser=>cond([
   [isFunction,identity],
-  [isString, get],
+  [isString,get],
   [isArray,pick],
-  [isPlainObject,fnsObj=>{
-    fnsObj = mapValues((fn,k)=>isFunction(fn)?fn:get(fn))(fnsObj);
-    return (targetObj)=>(mapValues((fn,k)=>fn(targetObj))(fnsObj));
-  }]
+  [isPlainObject, recurser],
 ]);
+export const pget = pgetFactory(targetObj=>mapv((fn,k)=>(pget(fn))(targetObj)));
+export const pgetv = pgetFactory(targetObj=>mapv((fn,k)=>(pgetv(fn))(targetObj[k])));
 
 export const objStringifierFactory = ({
   getPrefix=()=>'',
