@@ -254,8 +254,6 @@ export const parseStyleString = (()=>{
   };
   return getCachedOrParseThenCache;
 })();
-console.log(`parseStyleString('mr1%')`, parseStyleString('mr1%'));
-console.log(`parseStyleString(nthn4-3w19%_mr1%)`, parseStyleString('nthn4-3w19%_mr1%'));
 // check cached combos, check constants,run getPrefix:getSuffix
 
 /**
