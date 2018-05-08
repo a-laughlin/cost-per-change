@@ -20,7 +20,8 @@ import {
   mapProps as rcMap,withProps,shouldUpdate as rcShouldUpdate,setObservableConfig,
   componentFromStream,createEventHandler,
 } from 'recompose';
-import { analyse,demoState,transpile } from './code-analysis'
+import { analyse} from './code-analysis';
+import {initialState} from './initial-state';
 import {asyncRepoUrlToGraph,getExampleRepo} from './api'
 import * as d3 from 'd3';
 import {schemeReds,scaleOrdinal,interpolateReds} from 'd3-scale-chromatic';
@@ -472,7 +473,7 @@ const AppHeader = Header(shouldUpdate(stubFalse),withItems(AppLogo), h('lAIC lJC
 // }});
 const App = Div(
   shouldUpdate(stubFalse),
-  withGlobalState({initialState:demoState}),
+  withGlobalState({initialState}),
   withItems(Modal, AppHeader, TokenArea, RepoList),
   pipeClicks(
     from('helpMessages.0'),
