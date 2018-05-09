@@ -146,6 +146,17 @@ export const pipeMouseLeave = handlerPipeHOCFactory({on:'MouseLeave'});
  */
 export const tpl = curry((s,data)=>s.replace(/\[(.+?)\]/g,(_,key)=>`[${get(key)(data)}]`),2);
 
+// benefits of switching to streams
+// pipeClicks|Changes can be a synchronous pipe, letting the data streams handle async stuff
+// encourages moving logic out of component pipes
+// eliminates second pipe arg, which removes the need for pipeAllArgs
+// so much simpler...
+// no need for this templating function
+// no strings means typing systems are happier
+// one prop passed
+// everything else is joins
+// minimal elements
+// minimal streams
 
 const replacedGet = curry((s,props)=>get(tpl(s,props),props),2);
 const replacedPick = curry((arr,props)=>pick(arr.map(s=>tpl(s,props)))(props),2);
