@@ -1,3 +1,23 @@
+// state format
+// const globalStateHOC = withGlobalState({initialState:{
+//   userTokens:{
+//     '0':{id:'0',value:'49c740018d76ccec3621177873e29905dc427e7b'}
+//   },// value:'<token here>', },
+//   repos:{
+//     'repo0':{id:'repo0', repoid:'repo0', url:`https://github.com/a-laughlin/nametbd/prev-version`,'changetime':'60',devcost:'80'},
+//   },
+//   repoNodes:{
+//     'repo0_f0':{id:'repo0_f0',repoid:'repo0',path:`/src/apps`,enabled:true,hovered:false},
+//     'repo0_f1':{id:'repo0_f1',repoid:'repo0',path:`/src/apps/chrome.js`, code:'const example={foo:"bar"};',enabled:true,hovered:false},
+//     'repo0_f2':{id:'repo0_f2',repoid:'repo0',path:`/src/apps/firefox.js`,code:'const example=(a,b)=>({foo:a,baz:b});',enabled:true,hovered:false},
+//   },
+//   repoNodeOutEdges:{
+//     repo0_f0:{id:'repo0_f0',repoid:'repo0',edges:['repo0_f1','repo0_f2']},
+//   },
+//   helpMessages:{
+//     // '0':{id:'0',msg:'hello world'},
+//   },
+// }});
 
 /*eslint-disable*/
 const token = process.env.REACT_APP_GITHUB_TOKEN;
