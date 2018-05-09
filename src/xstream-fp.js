@@ -1,24 +1,29 @@
 
 import xstream from 'xstream';
-import concat from 'xstream/extra/concat';
-import fromDiagram from 'xstream/extra/fromDiagram';
-import fromEvent from 'xstream/extra/fromEvent';
-import tween from 'xstream/extra/tween';
-import buffer from 'xstream/extra/buffer';
-import debounce from 'xstream/extra/debounce';
-import delay from 'xstream/extra/delay';
-import dropRepeats from 'xstream/extra/dropRepeats';
-import dropUntil from 'xstream/extra/dropUntil';
-import flattenConcurrently from 'xstream/extra/flattenConcurrently';
-import flattenSequentially from 'xstream/extra/flattenSequentially';
-import pairwise from 'xstream/extra/pairwise';
-import combine from 'xstream/extra/sampleCombine';
-import split from 'xstream/extra/split';
-import throttle from 'xstream/extra/throttle';
+import econcat from 'xstream/extra/concat';
+import efromDiagram from 'xstream/extra/fromDiagram';
+import efromEvent from 'xstream/extra/fromEvent';
+import etween from 'xstream/extra/tween';
+import ebuffer from 'xstream/extra/buffer';
+import edebounce from 'xstream/extra/debounce';
+import edelay from 'xstream/extra/delay';
+import edropRepeats from 'xstream/extra/dropRepeats';
+import edropUntil from 'xstream/extra/dropUntil';
+import eflattenConcurrently from 'xstream/extra/flattenConcurrently';
+import eflattenSequentially from 'xstream/extra/flattenSequentially';
+import epairwise from 'xstream/extra/pairwise';
+import esampleCombine from 'xstream/extra/sampleCombine';
+import esplit from 'xstream/extra/split';
+import ethrottle from 'xstream/extra/throttle';
 
 // export the base obj for factories
 export const xs = xstream;
-// factories:
+
+// these make life easier when working with normal pipes
+export const mergeWith = (...streams)=>stream=>xs.merge(stream,...streams);
+export const combineWith = (...streams)=>stream=>xs.combine(stream,...streams);
+
+
 
 // Methods/Operators
 // Methods are functions attached to a Stream instance, like stream.addListener().
@@ -40,32 +45,36 @@ export const mapTo = (...a)=>s=>s.mapTo(...a);
 export const remember = (...a)=>s=>s.remember(...a);
 export const removeListener = (...a)=>s=>s.removeListener(...a);
 export const replaceError = (...a)=>s=>s.replaceError(...a);
-export const setDebugListener = (...a)=>s=>s.setDebugListener(...a);
 export const shamefullySendComplete = (...a)=>s=>s.shamefullySendComplete(...a);
 export const shamefullySendError = (...a)=>s=>s.shamefullySendError(...a);
 export const shamefullySendNext = (...a)=>s=>s.shamefullySendNext(...a);
 export const startWith = (...a)=>s=>s.startWith(...a); // - returns MemoryStream
 export const subscribe = (...a)=>s=>s.subscribe(...a);
 export const take = (...a)=>s=>s.take(...a);
+export const setDebugListener = ({
+  next = n => console.log('debug next',n),
+  error = e => console.error('debug error',e),
+  complete = () => console.log('debug complete'),
+}={})=>s=>{s.setDebugListener({next,error,complete});return s;};
+export const addDebugListener = ({
+  next = n => console.log('debug next',n),
+  error = e => console.error('debug error',e),
+  complete = () => console.log('debug complete'),
+}={})=>s=>{s.addListener({next,error,complete});return s;};
 
 // extras
-export {
-  // factories
-  concat,
-  fromDiagram,
-  fromEvent,
-  tween,
-  // methods/operators
-  buffer,
-  debounce,
-  delay,
-  dropRepeats,
-  dropUntil,
-  flattenConcurrently,
-  flattenSequentially,
-  pairwise,
-  split,
-  throttle,
-};
-export const sampleCombine = (stream,...streams)=>stream.compose(combine(...streams));
-export const withLatestFrom = sampleCombine;
+export const concat = (...streams)=>stream=>stream.compose(econcat);
+export const fromDiagram = (...streams)=>stream=>stream.compose(efromDiagram);
+export const fromEvent = (...streams)=>stream=>stream.compose(efromEvent);
+export const tween = (...streams)=>stream=>stream.compose(etween);
+export const buffer = (...streams)=>stream=>stream.compose(ebuffer);
+export const debounce = (...streams)=>stream=>stream.compose(edebounce);
+export const delay = (...streams)=>stream=>stream.compose(edelay);
+export const dropRepeats = (...streams)=>stream=>stream.compose(edropRepeats);
+export const dropUntil = (...streams)=>stream=>stream.compose(edropUntil);
+export const flattenConcurrently = (...streams)=>stream=>stream.compose(eflattenConcurrently);
+export const flattenSequentially = (...streams)=>stream=>stream.compose(eflattenSequentially);
+export const pairwise = (...streams)=>stream=>stream.compose(epairwise);
+export const sampleCombine = (...streams)=>stream=>stream.compose(esampleCombine);
+export const split = (...streams)=>stream=>stream.compose(esplit);
+export const throttle = (...streams)=>stream=>stream.compose(ethrottle);
