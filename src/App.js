@@ -12,7 +12,8 @@ import {
   fltrv, fltrk,mapkToObjk, mapvToObjk, mapvToObjv, mapvToArr, mapkToArr,values,condNoExec as condnx,
   is,ifElse,cond,isArray,stubTrue,isFunction,ensureFunction,stubNull,tranToArr,and,converge, omitv, assignAll,
   fltrMapvToArr,pipeAllArgs,stubObject,isUndefined,not,stubFalse,round,debounce,memoizeFor,memoize,sortBy,keyBy,
-  isPlainObject,isString,kebabCase,pipeAsync,size,fltrvToArr,pipeAllArgsAsync,isNumber,ifError,logAndThrow
+  isPlainObject,isString,kebabCase,pipeAsync,size,fltrvToArr,pipeAllArgsAsync,isNumber,ifError,logAndThrow,
+  pget,pgetv
 } from './utils.js';
 
 
@@ -36,20 +37,22 @@ import {
 
 // plus a few shorthands for lists vertical, horizontal, and grid HOCs
 import {v,h,g,vi,hi,gi,withStyles} from './styles.js';
-import * as xs from './xstream-fp'
 import {
   ABOUT_HELP,REPO_URL_HELP,TIME_PER_CHANGE_HELP,CYCLOMATIC_HELP, MAINTAINABILITY_HELP,EFFORT_HELP
 } from './help-messages.js';
 
-import {repos_devcost$, to_repos_devcost$,mapCollectionStream} from './dataflow.js';
-import {map,sampleCombine,flatten} from './xstream-fp.js';
+import {
+  repos$,repos_devcost$, to_repos_changetime$, repos_changetime$,to_repos_devcost$,
+  $defaultValue, $value, from_target_value
+} from './dataflow.js';
+import {xs,map,setDebugListener,addDebugListener} from './xstream-fp';
 
 
 
 
 
 // get our withItems factory, and use it to make sure all children can access state
-const withItems = withItemsHOCFactory({mapAllChildrenProps:pick([statePropKey,statePublishKey])});
+const withItems = withItemsHOCFactory({mapAllChildrenProps:pick(['data',statePropKey,statePublishKey])});
 // from basically means fromParent (see itemsToElements in hoc-utils)
 // for consistency, the handler pipes (e.g., pipeClicks) pass props twice so from works
 const from = args=>(_,parentProps)=>polyGet(args)(mergeStateProps(parentProps))
@@ -81,7 +84,7 @@ const Modal = Div(
       withStyles(`posF top80px p.5 dB wAuto minw3 minh3 bgcF z1000 b1px bcC bSolid brad10px crD`,{boxShadow:'0px 0px 205px 7px #777'})
     ))
   )),
-  h('posF left0px top-1000px w100% h100% lJCC lAIC'),hi
+  h('posF left0px top-10000px w100% h100% lJCC lAIC'),hi
 );
 const withModal = (msgKey,MsgComponent) => {
   return compose(
@@ -398,26 +401,24 @@ const MetricsBody = Div(
 const TimePerChangeText = Span(withItems(TIME_PER_CHANGE_HELP),v('wsPL'));
 const TimePerChangeHelp = Span(withItems(QMark),withModal('time-per-change-help',TimePerChangeText));
 const TimePerChangeLabel = Label(withItems('Time Per Change'),h('t0.8'));
+// console.log(`repos_changetime$`, repos_changetime$);
+
 const TimePerChange = TextInput(
-  mapFrom({defaultValue:'repos[id].changetime',repoid:'id'}),
-  pipeChanges(from('target.value'),toState('repos[repoid].changetime')),
+  $defaultValue(repos_changetime$),
+  pipeChanges(from_target_value,to_repos_changetime$),
   h('w3')
 );
 
 const DevCostPerHourText = Span(withItems(`Developer Hourly Rate, to calculate cost per change.`),v('wsPL'));
 const DevCostPerHourHelp = Span(withItems(QMark),withModal(`developers-hourly-rate`,DevCostPerHourText));
 const DevCostPerHourLabel = Label(withItems('Dev Hourly Cost'),h('t0.8'));
-const DevCostPerHour = TextInput(
-  mapFrom({defaultValue:'repos[id].devcost',repoid:'id'}),
-  pipeChanges(from('target.value'),toState('repos[repoid].devcost')),
+const DevCostPerHour = Input(
+  $defaultValue(repos_devcost$.map(plog(`devcost`))),
+  pipeChanges(from_target_value,to_repos_devcost$),
   h('w3')
 );
-// const DevCostPerHour = TextInput(
-//   mapCollectionStream({defaultValue:repos_devcost$}),
-//   pipeChanges(from({value:'target.value',data:'id'}),to_repos_devcost$),
-//   h('w3')
-// );
-const MetricsParams = Div(withItems(pipe(from(['id']),toItemProps(
+
+const MetricsParams = Div(withItems(pipe(from({data:'id'}),toItemProps(
   TimePerChangeLabel, TimePerChangeHelp, TimePerChange,
   DevCostPerHourLabel, DevCostPerHourHelp, DevCostPerHour,
 ))),h('mtAuto'),hi('ml.5'));
@@ -443,32 +444,7 @@ const AppHeader = Header(shouldUpdate(stubFalse),withItems(AppLogo), h('lAIC lJC
 
 
 
-
-
-
-
-
-
-// state format
-// const globalStateHOC = withGlobalState({initialState:{
-//   userTokens:{
-//     '0':{id:'0',value:'49c740018d76ccec3621177873e29905dc427e7b'}
-//   },// value:'<token here>', },
-//   repos:{
-//     'repo0':{id:'repo0', repoid:'repo0', url:`https://github.com/a-laughlin/nametbd/prev-version`,'changetime':'60',devcost:'80'},
-//   },
-//   repoNodes:{
-//     'repo0_f0':{id:'repo0_f0',repoid:'repo0',path:`/src/apps`,enabled:true,hovered:false},
-//     'repo0_f1':{id:'repo0_f1',repoid:'repo0',path:`/src/apps/chrome.js`, code:'const example={foo:"bar"};',enabled:true,hovered:false},
-//     'repo0_f2':{id:'repo0_f2',repoid:'repo0',path:`/src/apps/firefox.js`,code:'const example=(a,b)=>({foo:a,baz:b});',enabled:true,hovered:false},
-//   },
-//   repoNodeOutEdges:{
-//     repo0_f0:{id:'repo0_f0',repoid:'repo0',edges:['repo0_f1','repo0_f2']},
-//   },
-//   helpMessages:{
-//     // '0':{id:'0',msg:'hello world'},
-//   },
-// }});
+//App
 const App = Div(
   shouldUpdate(stubFalse),
   withGlobalState({initialState}),
