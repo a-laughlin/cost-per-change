@@ -10,6 +10,8 @@ import {
   unary,sortBy,keyBy,kebabCase,size
 } from 'lodash/fp';
 import {merge,mergeWith,set as _set,debounce as _debounce,memoize as _memoize} from 'lodash';
+import $$observable from 'symbol-observable';
+
 
 export const [forOwn,transform,find,filter,map,each,mapValues,reduce] = [
   forOwnFP,transformFP,findFP,filterFP,mapFP,eachFP,mapValuesFP,reduceFP].map(fn=>fn.convert({cap:false}));
@@ -38,6 +40,7 @@ export const isKeyMatch = predicate=>(v,k)=>predicate(k);
 export const isValMatch = predicate=>(v,k)=>predicate(v);
 export const isProductionEnv = ()=>process.env.NODE_ENV === 'production';
 export const matches = arity(1)(matchesFP);
+export const isObservable = (x=Object.create(null))=>isFunction(x[$$observable]);
 // stubs
 export const stubNull = ()=>null;
 export const stubArray = ()=>[];
@@ -290,6 +293,7 @@ export const groupByValues = groupByProps((dv,sv,k,d,s)=>ensureArray(sv).forEach
 // groupByValues(aColl) // {1: [{a:[1,2]},{c:[1,3]}], 2: [{a:[1,2]},{b:[2]}], 3: [{c:[1,3]}]}
 // pipe(map(pick(['a','b'])),groupByValues)(aColl) // {1:[{a:[1,2]}], 2:[{a:[1,2]}, {b:[2]}]}
 // const oColl = {a:{d:[1,2]}, b:{d:[2]}, c:{d:[1,3]}};
+// groupByKey('d')(oColl) // {d:[{d:[1,2]},{d:[2]},{d:[1,3]}]}
 // groupByKeys(oColl) // {d:[{d:[1,2]},{d:[2]},{d:[1,3]}]}
 // groupByValues(aColl) // {1:[{d:[1,2]},{d:[1,3]}], 2:[{d:[1,2]},{d:[2]}], 3:[{d:[1,3]}]}
 export const getMatchReplacer = replacer=>(p,f)=>replacer(p,ensureFunction(f));
@@ -323,14 +327,13 @@ export const concatBefore = getMatchReplacer((predicate,getReplacement)=>collect
 
 
 // Objects
-const pgetFactory = recurser=>cond([
+export const pget = cond([
   [isFunction,identity],
   [isString,get],
   [isArray,pick],
-  [isPlainObject, recurser],
+  [isPlainObject, fnsObj=>targetObj=>mapv((fn,k)=>(pget(fn))(targetObj))(fnsObj)],
+  [stubTrue,identity],
 ]);
-export const pget = pgetFactory(targetObj=>mapv((fn,k)=>(pget(fn))(targetObj)));
-export const pgetv = pgetFactory(targetObj=>mapv((fn,k)=>(pgetv(fn))(targetObj[k])));
 
 export const objStringifierFactory = ({
   getPrefix=()=>'',
