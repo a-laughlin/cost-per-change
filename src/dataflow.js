@@ -14,11 +14,11 @@ setObservableConfig(xstreamConfig);
 const plog = pipe(plogg,debug);
 export const joinFactory = ({srcKey='data',destKey='value'}={})=>(coll$,dest=destKey)=>mapPropsStream(pipe(
   combineWith(coll$),
-  map((args)=>{
-    console.log(`coll$`, coll$);
-    console.log(`args`, args);
-    return args;
-  }),
+  // map((args)=>{
+  //   // console.log(`coll$`, coll$);
+  //   console.log(`args`, args);
+  //   return args;
+  // }),
   map(([{[srcKey]:data},coll])=>(
     dest ? {data,[dest]:get(data)(coll)} : {data}
   )),
@@ -68,8 +68,9 @@ export const {repos_changetime$,to_repos_changetime$}=streamFactory('repos_chang
 
 // files
 export const {repoNodes$,to_repoNodes$} = streamFactory('repoNodes')(store$);
-export const repoNodesByRepoid$ = repoNodes$.map(groupByKey('repoid'));
 export const {repoNodes_repoid$,to_repoNodes_repoid$} = streamFactory('repoNodes_repoid')(repoNodes$);
+// files selectors
+export const repoNodes_by_repoid$ = repoNodes$.map(groupByKey('repoid'));
 
 
 export const repoNodeOutEdges$ = map(get('repoNodeOutEdges'))(store$);

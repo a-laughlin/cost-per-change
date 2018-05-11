@@ -324,6 +324,9 @@ const mergeStyles = pipe(argsToArray(identity),mapv(normalizeStyles),mergeAll);
 let globalConfig;
 globalConfig = {propsPassed:onPropsPassedInline,itemPropsPassed:onItemPropsPassedInline};
 globalConfig = {propsPassed:onPropsPassedStyletron,itemPropsPassed:onItemPropsPassedStyletron};
+export const withCondStyles = (stylesFn)=>BaseComponent=>props=>{
+  return createElement(BaseComponent,{...props,style:mergeStyles(stylesFn(props)||{})})
+};
 export const withStyles = mergeableHocFactory({
   onArgsPassed:mergeStyles,
   onPropsPassed:globalConfig.propsPassed

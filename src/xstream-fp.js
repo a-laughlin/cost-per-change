@@ -56,25 +56,25 @@ export const setDebugListener = ({
   error = e => console.error('debug error',e),
   complete = () => console.log('debug complete'),
 }={})=>s=>{s.setDebugListener({next,error,complete});return s;};
-export const addDebugListener = ({
-  next = n => console.log('debug next',n),
-  error = e => console.error('debug error',e),
-  complete = () => console.log('debug complete'),
-}={})=>s=>{s.addListener({next,error,complete});return s;};
+export const addDebugListener = s=>{s.addListener({
+  next : n => console.log('debug next',n),
+  error : e => console.error('debug error',e),
+  complete : () => console.log('debug complete'),
+});return s;};
 
 // extras
-export const concat = (...streams)=>stream=>stream.compose(econcat);
-export const fromDiagram = (...streams)=>stream=>stream.compose(efromDiagram);
-export const fromEvent = (...streams)=>stream=>stream.compose(efromEvent);
-export const tween = (...streams)=>stream=>stream.compose(etween);
-export const buffer = (...streams)=>stream=>stream.compose(ebuffer);
-export const debounce = (...streams)=>stream=>stream.compose(edebounce);
-export const delay = (...streams)=>stream=>stream.compose(edelay);
-export const dropRepeats = (...streams)=>stream=>stream.compose(edropRepeats);
-export const dropUntil = (...streams)=>stream=>stream.compose(edropUntil);
-export const flattenConcurrently = (...streams)=>stream=>stream.compose(eflattenConcurrently);
-export const flattenSequentially = (...streams)=>stream=>stream.compose(eflattenSequentially);
-export const pairwise = (...streams)=>stream=>stream.compose(epairwise);
-export const sampleCombine = (...streams)=>stream=>stream.compose(esampleCombine);
-export const split = (...streams)=>stream=>stream.compose(esplit);
-export const throttle = (...streams)=>stream=>stream.compose(ethrottle);
+export const concat = (...args)=>stream=>stream.compose(econcat(...args));
+export const fromDiagram = (...args)=>stream=>stream.compose(efromDiagram(...args));
+export const fromEvent = (...args)=>stream=>stream.compose(efromEvent(...args));
+export const tween = (...args)=>stream=>stream.compose(etween(...args));
+export const buffer = (...args)=>stream=>stream.compose(ebuffer(...args));
+export const debounce = (...args)=>stream=>stream.compose(edebounce(...args));
+export const delay = (...args)=>stream=>stream.compose(edelay(...args));
+export const dropRepeats = stream=>stream.compose(edropRepeats());
+export const dropUntil = (...args)=>stream=>stream.compose(edropUntil(...args));
+export const flattenConcurrently = (...args)=>stream=>stream.compose(eflattenConcurrently(...args));
+export const flattenSequentially = (...args)=>stream=>stream.compose(eflattenSequentially(...args));
+export const pairwise = (...args)=>stream=>stream.compose(epairwise(...args));
+export const sampleCombine = (...args)=>stream=>stream.compose(esampleCombine(...args));
+export const split = (...args)=>stream=>stream.compose(esplit(...args));
+export const throttle = (...args)=>stream=>stream.compose(ethrottle(...args));

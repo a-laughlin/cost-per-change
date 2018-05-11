@@ -81,7 +81,6 @@ export const withItemsHOCFactory = (function() {
     // passing parent props as the second arg enables fromParent function to get props in pipes
     // recurse to enable pipes, but switch parentProps to child props on recursion to prevent accidental parent prop copying
     [isFunction,(itm,props,parentProps)=>itemToElements(itm(props,parentProps),props,props)],
-    [isComponentString,(itm,props)=>createElement(itm,props)],
     [isString,(itm,props)=>createElement(Fragment,null,itm)],
     [isNumber,(itm,props)=>createElement(Fragment,null,itm)],
     [isArray,(arr,props)=>flatMap(itm=>itemToElements(itm,props,props))(arr)],

@@ -11,16 +11,16 @@ import {
   without,forkJoin,each,forOwn,pickBy,transform,omitBy,matches,transformToObj,mapv,mapk,tran,cycle,
   fltrv, fltrk,mapkToObjk, mapvToObjk, mapvToObjv, mapvToArr, mapkToArr,values,condNoExec as condnx,
   is,ifElse,cond,isArray,stubTrue,isFunction,ensureFunction,stubNull,tranToArr,and,converge, omitv, assignAll,
-  fltrMapvToArr,pipeAllArgs,stubObject,isUndefined,not,stubFalse,round,debounce,memoizeFor,memoize,sortBy,keyBy,
+  fltrMapvToArr,pipeAllArgs,stubObject,isUndefined,not,stubFalse,round,memoize,sortBy,keyBy,
   isPlainObject,isString,kebabCase,pipeAsync,size,fltrvToArr,pipeAllArgsAsync,isNumber,ifError,logAndThrow,
-  pget,pgetv
+  pget,pgetv,isNull
 } from './utils.js';
-
 
 import {
   mapProps as rcMap,withProps,shouldUpdate as rcShouldUpdate,setObservableConfig,
   componentFromStream,createEventHandler,mapPropsStream
 } from 'recompose';
+import {getModalComponent,getModalHOC} from './component-modal.js';
 import { analyse} from './code-analysis';
 import {initialState} from './initial-state';
 import {asyncRepoUrlToGraph,getExampleRepo} from './api'
@@ -36,19 +36,23 @@ import {
 } from './hoc-utils.js';
 
 // plus a few shorthands for lists vertical, horizontal, and grid HOCs
-import {v,h,g,vi,hi,gi,withStyles} from './styles.js';
+import {v,h,g,vi,hi,gi,withStyles,withCondStyles} from './styles.js';
 import {
   ABOUT_HELP,REPO_URL_HELP,TIME_PER_CHANGE_HELP,CYCLOMATIC_HELP, MAINTAINABILITY_HELP,EFFORT_HELP
 } from './help-messages.js';
 
 import {
   repos$,repos_devcost$, to_repos_changetime$, repos_changetime$,to_repos_devcost$,
-  $defaultValue, $value, from_target_value
+  $defaultValue, $value, from_target_value,repoNodes_by_repoid$
 } from './dataflow.js';
-import {xs,map,setDebugListener,addDebugListener} from './xstream-fp';
+import {xs,map,setDebugListener,combineWith,dropRepeats,addDebugListener,fold,debug,debounce,startWith} from './xstream-fp';
 
-
-
+// TODO: Repo loading spinner.
+// TODO: Token field flash red if try to load a repo without a token.
+// TODO: LocalStorage token.
+// TODO: Stacked bar chart in table - current vs. optimal
+// TODO: Repo metrics - maybe as background behind stacked bar.
+// TODO: convert components to streamed - creates a dependency, but so does anything else to attach state
 
 
 // get our withItems factory, and use it to make sure all children can access state
@@ -73,34 +77,9 @@ const scaleRed = getRedGenerator(0,4);
 // could make this more intuitive, comparing across domains, if the numbers were fixed... but... insufficient time.
 
 
-
-// Modal
-const modalComponents={};
-const Modal = Div(
-  withItems(pipe(
-    from('helpMessages.0'),
-    ifElse(isUndefined,()=>stubNull,({msgKey})=>Div(
-      withItems(modalComponents[msgKey]||`No Help Message with key "${msgKey}".`),
-      withStyles(`posF top80px p.5 dB wAuto minw3 minh3 bgcF z1000 b1px bcC bSolid brad10px crD`,{boxShadow:'0px 0px 205px 7px #777'})
-    ))
-  )),
-  h('posF left0px top-10000px w100% h100% lJCC lAIC'),hi
-);
-const withModal = (msgKey,MsgComponent) => {
-  return compose(
-    pipeClicks(
-      (...args)=>{
-        const key = ensureFunction(msgKey)(...args);
-        modalComponents[key]||(modalComponents[key]=isString(MsgComponent)?Span(withItems(MsgComponent)):MsgComponent);
-        return ({msgKey:key,id:'0'})
-      },
-      toState('helpMessages.0')
-    ),
-    v('crP')
-  );
-}
-
-
+// great modal styling article
+// https://css-tricks.com/considerations-styling-modal/
+const [Modal,withModal] = [getModalComponent(),getModalHOC()];
 
 // Random Util Element
 const QMark = Span(withItems('?'),
@@ -123,10 +102,10 @@ const TokenHelpLink = A(
   withItems('github.com/settings/tokens')
 );
 const TokenHelpMsg = Span(withItems('Get Token at: ',TokenHelpLink,` (sorry that clicking links in the modal doesn't work yet)`));
-const TokenHelp = Span(withItems(QMark),withModal('token-help',TokenHelpMsg));
+const TokenHelp = Span(withItems(QMark),withModal(TokenHelpMsg));
 const ruleLink = 'https://github.com/escomplex/escomplex/blob/master/METRICS.md';
 const AboutModal = P(withItems(ABOUT_HELP), v('w100% wsPL peN'));
-const About = Span(withItems('About'),withModal('about', AboutModal));
+const About = Span(withItems('About'),withModal(AboutModal));
 const TokenArea = Div(shouldUpdate(stubFalse),
   withItems(Label(withItems('GitHub Token')),TokenHelp,TokenTextContainer,About),
   h('w100%'),hi('nth3mrAuto first:ml.5 last:mr.5'),
@@ -202,7 +181,7 @@ const RepoUrlInput = TextInput(
 );
 
 const RepoUrlHelpText = Span(withItems(REPO_URL_HELP),v('wsPL'));
-const RepoUrlHelpTrigger = Span(withItems(QMark),withModal(`repo-url-help`,RepoUrlHelpText));
+const RepoUrlHelpTrigger = Span(withItems(QMark),withModal(RepoUrlHelpText));
 const RepoUrlContainer = Div(withItems(passIdTo(RepoUrlInput)),h('lGrow1'));
 const RemRepoButton = Button(withItems('Remove'),
   pipeClicks(
@@ -260,7 +239,7 @@ const TreeComponent = (props)=>{
   // debug that.  Just fix when updating with streams - subscribe the modal to circle clicks.
   const Circ = Circle(
     mapFrom(({getColor,style={}})=>({r:4,style:{...style,fill:getColor(node),stroke:'#ccc',strokeWidth:'1px'}})),
-    withModal(from('id'),Pre(withItems(`file click functionality not implemented yet`))),
+    withModal(Pre(withItems(`file click functionality not implemented yet`))),
   );
   return (
   <g key={id}>
@@ -313,23 +292,17 @@ const TreeSVG = Svg(
 
 
 // Rules
-// const ChangeCostRuleHelp = Span(withItems(QMark),withModal(`change-cost-help`));
-// const ChangeCostRule = Span(withItems('ChangeCost',ChangeCostRuleHelp),h,hi);
 const CyclomaticHelpText = Span(withItems(CYCLOMATIC_HELP),v('wsPL'));
-const CyclomaticRuleHelpTrigger = Span(withItems(QMark),withModal(`cyclomatic-help`,CyclomaticHelpText));
+const CyclomaticRuleHelpTrigger = Span(withItems(QMark),withModal(CyclomaticHelpText));
 const CyclomaticRule = Span(withItems('Cyclomatic',CyclomaticRuleHelpTrigger),h,hi);
 const EffortHelpText = Span(withItems(EFFORT_HELP),v('wsPL'));
-const EffortRuleHelpTrigger = Span(withItems(QMark),withModal(`effort-help`,EffortHelpText));
+const EffortRuleHelpTrigger = Span(withItems(QMark),withModal(EffortHelpText));
 const EffortRule = Span(withItems('Effort',EffortRuleHelpTrigger),h,hi);
-const LocRuleHelpTrigger = Span(withItems(QMark),withModal(`loc-help`));
-const LocRule = Span(withItems('Loc',LocRuleHelpTrigger),h,hi);
 const MaintainabilityHelpText = Span(withItems(MAINTAINABILITY_HELP),v('wsPL'));
-const MaintainabilityRuleHelpTrigger = Span(withItems(QMark),withModal(`maint-help`,MaintainabilityHelpText));
+const MaintainabilityRuleHelpTrigger = Span(withItems(QMark),withModal(MaintainabilityHelpText));
 const MaintainabilityRule = Span(withItems('Maintainability',MaintainabilityRuleHelpTrigger),h,hi);
-const ParamsRuleHelpTrigger = Span(withItems(QMark),withModal(`params-help`));
-const ParamsRule = Span(withItems('Params',ParamsRuleHelpTrigger),h,hi);
 const Rules = Div(
-  withItems('Rules',MaintainabilityRule,EffortRule,CyclomaticRule/*,ParamsRule,LocRule*/),
+  withItems('Rules',MaintainabilityRule,EffortRule,CyclomaticRule),
   v,vi('t0.8 mt0.5',
   `nth1bgc${reds[4]} nth2bgc${reds[3]} nth3bgc${reds[2]} nth4bgc${reds[1]} nth5bgc${reds[0]}`)
 );
@@ -339,13 +312,13 @@ const Rules = Div(
 
 // Metrics Grid Header Row
 const RulesImpactText = Span(withItems(`How do this file's rules compare against repo max?`),v('wsPL'));
-const RulesImpactHelpTrigger = Span(withItems(QMark),withModal(`rules-impact-help`,RulesImpactText));
+const RulesImpactHelpTrigger = Span(withItems(QMark),withModal(RulesImpactText));
 const RulesImpact = Span(withItems('Rules Impact',RulesImpactHelpTrigger),h);
 const CostPerChangeText = Span(withItems(`(171-maintainability)/1000*devcost*changetime`),v('wsPL'));
-const CostPerChangeHelpTrigger = Span(withItems(QMark),withModal(`cost-per-change-help`,CostPerChangeText));
+const CostPerChangeHelpTrigger = Span(withItems(QMark),withModal(CostPerChangeText));
 const CostPerChange = Span(withItems('Cost per Change',CostPerChangeHelpTrigger),h);
 const UserImpactText = Span(withItems(`Just cyclomatic complexity for now.`),v('wsPL'));
-const UserImpactHelpTrigger = Span(withItems(QMark),withModal(`user-impact-help`,UserImpactText));
+const UserImpactHelpTrigger = Span(withItems(QMark),withModal(UserImpactText));
 const UserImpact = Span(withItems('User Impact',UserImpactHelpTrigger),h);
 const PathHeader = Span(withItems('Path'));
 
@@ -369,8 +342,21 @@ const RulesImpactCell = Div(
       return Div(withProps({style:{...s,height:`${1/styles.length}em`,width:`${s.width}%`}}));
     });
   })),
-  // h,hi
 );
+
+// problem to solve - mapping data prop to coll id
+// export const repoNodes_exclude_repoid$ = repoNodes_by_repoid$.map(fltrv()groupByKey('repoid'));
+
+// const from$ = (...streamMappers)=>fn=>props=>{
+//   const streams$ = streamMappers.map(s=>isFunction(s)?s(props):s)
+//   return xs.combine(...streams$).map(arr=>fn(...arr));
+// };
+// ({data}:id)=>coll$.map(get(id)), should be a common enough pattern to abstract - need to see if it arises in multiple cases
+// withItems(from$(
+//   ({data}:id)=>repoNodes$.map(get(id)),
+//   ({data}:id)=>repoNodes_by_repoid$.map(get(id))
+// })(repo,nodes);
+
 const MetricsBody = Div(
   withItems(
     PathHeader,
@@ -399,7 +385,7 @@ const MetricsBody = Div(
 
 // Dev Cost and Time Per Change Adjustments
 const TimePerChangeText = Span(withItems(TIME_PER_CHANGE_HELP),v('wsPL'));
-const TimePerChangeHelp = Span(withItems(QMark),withModal('time-per-change-help',TimePerChangeText));
+const TimePerChangeHelp = Span(withItems(QMark),withModal(TimePerChangeText));
 const TimePerChangeLabel = Label(withItems('Time Per Change'),h('t0.8'));
 // console.log(`repos_changetime$`, repos_changetime$);
 
@@ -410,7 +396,7 @@ const TimePerChange = TextInput(
 );
 
 const DevCostPerHourText = Span(withItems(`Developer Hourly Rate, to calculate cost per change.`),v('wsPL'));
-const DevCostPerHourHelp = Span(withItems(QMark),withModal(`developers-hourly-rate`,DevCostPerHourText));
+const DevCostPerHourHelp = Span(withItems(QMark),withModal(DevCostPerHourText));
 const DevCostPerHourLabel = Label(withItems('Dev Hourly Cost'),h('t0.8'));
 const DevCostPerHour = Input(
   $defaultValue(repos_devcost$.map(plog(`devcost`))),
@@ -448,13 +434,7 @@ const AppHeader = Header(shouldUpdate(stubFalse),withItems(AppLogo), h('lAIC lJC
 const App = Div(
   shouldUpdate(stubFalse),
   withGlobalState({initialState}),
-  withItems(Modal, AppHeader, TokenArea, RepoList),
-  pipeClicks(
-    from('helpMessages.0'),
-    ifElse(isUndefined,stubNull,pipeAllArgs(stubObject,toState('helpMessages')))
-    // ^ hack to prevent immediately closing the modal before it becomes visible
-    // Since stopPropagation doesn't work with pipeClicks (streams are another way to deal with this)
-  ),
+  withItems(AppHeader, TokenArea, RepoList,Modal),
   v, vi('mb1')
 );
 export default App
