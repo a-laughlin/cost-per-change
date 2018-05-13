@@ -1,16 +1,21 @@
 /* eslint-disable no-unused-vars */
 import {Component,isValidElement,cloneElement,createElement,Children,createFactory,Fragment} from 'react';
 import PropTypes from 'prop-types';
-import {getContext, mapProps, withContext,withReducer, isClassComponent,withProps,withHandlers} from 'recompose';
+import {mapProps, withReducer, isClassComponent,withProps,withHandlers,mapPropsStream,componentFromStream} from 'recompose';
 // import {styleObjectToClasses,mergeStyles} from './styles.js';
 import {merge,mergeWith} from 'lodash';
 import {
   pipe, identity, isString, isPlainObject, isFunction, isNull, isUndefined,stubTrue,isUndefOrNull,
   get, transform,flatten,find,mapValues,flattenDeep,flatMap, compose,reduce,cond,pipeAsync,pick,
   omit,ensureArray,plog,isNumber,isFalsy,stubNull,len0,len1,first,over,set,condNoExec,not,mapv,
-  argsToArray,arrayToArgs,acceptsArgsOrArray,ensureArgsArray,curry,isArray,unset,toEmptyCopy,
-  mapvToObjv,ensureFunction,constant,omitv,pipeAllArgsAsync,and,isProductionEnv,ifElse,has
+  argsToArray,arrayToArgs,acceptsArgsOrArray,curry,isArray,unset,toEmptyCopy,isObservable,
+  mapvToObjv,ensureFunction,constant,omitv,pipeAllArgsAsync,and,isProductionEnv,ifElse,has,
+
 } from './utils';
+import {of$,from$,take,combine$,map,toArray,periodic$,flatMap as flatMap$,combineWith,
+  flattenSequentially,flattenConcurrently,buffer,never$,addDebugListener,debug
+} from './utils$.js';
+
 
 // reference https://medium.com/@leathcooper/roll-your-own-provider-and-connect-with-recompose-ceb73ba29dd3
 // "it’s important to note that the component wrapped by withContext should render it’s children"
@@ -73,31 +78,54 @@ export const withItemsHOCFactory = (function() {
 
   const itemToElements = cond([
     [isUndefOrNull,stubNull],
-    // [isValidElement,(elem,props)=>elem],
-    [isValidElement,(elem,props)=>cloneElement(elem,props)],
+    [isValidElement,identity],//(elem,props)=>cloneElement(elem,props)],
     [isPropComponentCombo,(itm,props)=>createElement(itm.Component,{...props,...itm.props})],
     [isClassComponent,(itm,props)=>createElement(itm,props)],
     // passing child props as the first arg enables passing plain components
     // passing parent props as the second arg enables fromParent function to get props in pipes
     // recurse to enable pipes, but switch parentProps to child props on recursion to prevent accidental parent prop copying
+    [isObservable,(itm,props,parentProps)=>map(i=>{
+      return itemToElements(i,props);
+    })(itm)],
     [isFunction,(itm,props,parentProps)=>itemToElements(itm(props,parentProps),props,props)],
     [isString,(itm,props)=>createElement(Fragment,null,itm)],
     [isNumber,(itm,props)=>createElement(Fragment,null,itm)],
     [isArray,(arr,props)=>flatMap(itm=>itemToElements(itm,props,props))(arr)],
     [stubTrue,(itm,props)=>console.log(`unknown:`,itm)||createElement('pre',props,`unknown item type passed - received: ${JSON.stringify(itm,null,2)}`)],
   ]);
-
+  const ensureObservable = ifElse(isObservable,identity,of$);
   return ({
     mapAllChildrenProps = ()=>({}),
     pipeInputTransform = identity,
-  }={}) => argsToArray(ifElse(len0,identity, pipes=>BaseComponent=>props=>{
-    const parentProps = pipeInputTransform(props);
+  }={}) => argsToArray(ifElse(len0,identity, pipes=>BaseComponent=>parentProps=>{
+    const childrenProps = mapAllChildrenProps(parentProps||{});
+    let hasObs;
     return pipe(
-      mapv(itm=>itemToElements(itm,mapAllChildrenProps(parentProps||{}),parentProps)),
+      mapv(itm=>{
+        const elem = itemToElements(itm,childrenProps,parentProps);
+        if(isObservable(elem)){hasObs=true;}
+        return elem;
+      }),
       flattenDeep,
       omitv(isNull),
-      unwrapWhenPossible,
-      (children)=>createElement(BaseComponent,props,children)
+      ifElse(
+        x=>hasObs===undefined,
+        children=>createElement(BaseComponent,parentProps,unwrapWhenPossible(children)),
+        children=>(
+          createElement(
+            componentFromStream(p$=>{
+              return pipe(
+                map((arg)=>{
+                  const [props,...childrn] = arg;
+                  console.log(`childrn`, childrn);
+                  return createElement(BaseComponent,props,unwrapWhenPossible(childrn||[]));
+                }),
+              )(combine$(p$,...children));
+            }),
+            parentProps
+          )
+        )
+      )
     )(pipes);
   }));
 }());
@@ -112,13 +140,14 @@ export const mergeableHocFactory = ({onArgsPassed,onPropsPassed,_merged})=>(...a
   isComponent(args[0])
     ? props=>createElement(args[0],onPropsPassed(_merged,props))
     : mergeableHocFactory({onArgsPassed,onPropsPassed,_merged:{...(_merged||{}),...onArgsPassed(...args)}})
-)
+);
 
 
 /**
  * HOCs
  */
 export const withItems = withItemsHOCFactory();
+export const withItemsAllProps = withItemsHOCFactory({mapAllChildrenProps:identity});
 
 
 
@@ -145,9 +174,37 @@ export const pipeMouseLeave = handlerPipeHOCFactory({on:'MouseLeave'});
  */
 export const tpl = curry((s,data)=>s.replace(/\[(.+?)\]/g,(_,key)=>`[${get(key)(data)}]`),2);
 
-// benefits of switching to streams
-// pipeClicks|Changes can be a synchronous pipe, letting the data streams handle async stuff
-// encourages moving logic out of component pipes
+
+
+
+// phases (prototyping)
+//  store and streams in dataflow
+//  styles connected directly to components
+//  streams connected directly to components
+//  set directly to state
+//  business logic - on components (only one add todo button, why not?, the architecture makes it dead simple to move later)
+// phases (prototyping +1)
+
+
+
+// changeability & reliability FTW
+//   - minimizing dependency graphs
+//   - single responsibility
+//   - loc
+// string components FTW
+//   - one responsibility - semantic
+//   - one prop ftw (only one type)
+//   - pipes ftw
+// streams FTW
+//   - state only matters when it changes props.  It eliminates dependency graphs to make everything stateful, and don't update the things that don't need to change
+//   - mapstatetoprops, mapParentprops to props,
+// Store only contains collections.  Everything else is derived+memoized.
+// collections named like repo,repofile - id property matches the collection
+// conditionals only happen on parents
+// conditionals never happen within a component - it adds responsibilities.
+
+// Clicks|Changes can be a synchronous pipe, letting the data streams handle async stuff
+// encourages moving logic out of component pipes (how pass data)
 // eliminates second pipe arg, which removes the need for pipeAllArgs
 // so much simpler...
 // no need for this templating function

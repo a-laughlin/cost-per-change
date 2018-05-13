@@ -36,16 +36,16 @@ import {
 } from './hoc-utils.js';
 
 // plus a few shorthands for lists vertical, horizontal, and grid HOCs
-import {v,h,g,vi,hi,gi,withStyles,withCondStyles} from './styles.js';
+import {v,h,g,vi,hi,gi,withStyles} from './styles.js';
 import {
   ABOUT_HELP,REPO_URL_HELP,TIME_PER_CHANGE_HELP,CYCLOMATIC_HELP, MAINTAINABILITY_HELP,EFFORT_HELP
 } from './help-messages.js';
 
 import {
-  repos$,repos_devcost$, to_repos_changetime$, repos_changetime$,to_repos_devcost$,
-  $defaultValue, $value, from_target_value,repoNodes_by_repoid$
+  repos$,repos_devcost_by_id$,repos_changetime_by_id$, to_repo_devcost$, to_repo_changetime$,
+  $defaultValue, $value, from_target_value,repoNodes_by_repoid$,mapProp,repoNodes$
 } from './dataflow.js';
-import {xs,map,setDebugListener,combineWith,dropRepeats,addDebugListener,fold,debug,debounce,startWith} from './xstream-fp';
+import {of$,map,setDebugListener,combineWith,addDebugListener,combine$,fold,debug,debounce,startWith} from './utils$.js';
 
 // TODO: Repo loading spinner.
 // TODO: Token field flash red if try to load a repo without a token.
@@ -56,16 +56,17 @@ import {xs,map,setDebugListener,combineWith,dropRepeats,addDebugListener,fold,de
 
 
 // get our withItems factory, and use it to make sure all children can access state
-const withItems = withItemsHOCFactory({mapAllChildrenProps:pick(['data',statePropKey,statePublishKey])});
+const withItems = withItemsHOCFactory({mapAllChildrenProps:pick([statePropKey,statePublishKey])});
+const withItems$ = withItemsHOCFactory({mapAllChildrenProps:pick(['data'])});
 // from basically means fromParent (see itemsToElements in hoc-utils)
 // for consistency, the handler pipes (e.g., pipeClicks) pass props twice so from works
 const from = args=>(_,parentProps)=>polyGet(args)(mergeStateProps(parentProps))
 const mapFrom = selector=>rcMap(p=>({...from(selector)(p,p),...pick([statePropKey,statePublishKey])(p)}));
 const mapColl = collsFns=>(data,props)=>mapv((f,ckey)=>f(props)(from(ckey)(data,props)))(collsFns);
 const shouldUpdate = fn=>rcShouldUpdate((p,n)=>fn({...p,...p[statePropKey]},{...n,...n[statePropKey]}));
-const mapIdsToItemProps = (...Components)=>mapvToArr(pipe(polyGet(['id']),({id})=>({id}),toItemProps(...Components)));
+const mapIdsToItemProps = (...Components)=>mapvToArr(pipe(polyGet(['id']),({id})=>({id,data:id}),toItemProps(...Components)));
 const toDataProp = x=>({data:x});
-const passIdTo = (...Components)=>pipe(from(['id']),toItemProps(...Components));
+const passIdTo = (...Components)=>pipe(from({data:'id',id:'id'}),toItemProps(...Components));
 
 
 // Reds Scale Generator
@@ -322,31 +323,67 @@ const UserImpactHelpTrigger = Span(withItems(QMark),withModal(UserImpactText));
 const UserImpact = Span(withItems('User Impact',UserImpactHelpTrigger),h);
 const PathHeader = Span(withItems('Path'));
 
-
+// const from$ = (...streams)=>fn=>props=>ensureArray(fn(props))
+// mapPropsStream()(na,{data,id})=>componentFromStream(p$={
+//   React.Fragment,{data}
+// });xs.combine(...streams$).map((...streams)=>{
+//   const result = fn(data||id,...streams);
+//   console.log(`result`, result);
+//   return componentFromStream(React.Fragment,ensureArray(result).map(componentFromStream);
+// });
 // Metrics Grid Cells
 const GridCellRoundNum = Span(withItems(pipe(from('data'),round)));
 const GridCellPath = Span(withItems(pipe(from('repoNodes[id].path'),v=>v.replace(/^.+\//g,''))));
 const RulesImpactCell = Div(
-  withItems(from(({repoNodes,repos,id})=>{
-    const node = repoNodes[id];
-    const repo = repos[node.repoid];
-    const styles = /*sortBy('width')*/([// should generate these based on selected rules, but select/deselect nodes isn't implemented yet
-      {backgroundColor:reds[4],width:(node.maintainability/repo.maintainabilityMax)*100},
-      {backgroundColor:reds[3],width:(node.effort/repo.effortMax)*100},
-      {backgroundColor:reds[2],width:(node.cyclomatic/repo.cyclomaticMax)*100},
-      // {backgroundColor:reds[1],width:(node.params/repo.paramsMax)*100},
-      // {backgroundColor:reds[0],width:(node.loc/repo.locMax)*100},
-    ]);
-    return styles.map((s,i,c)=>{
-      const lastWidth = i===0 ? 0: c[i-1].width;
-      return Div(withProps({style:{...s,height:`${1/styles.length}em`,width:`${s.width}%`}}));
-    });
+  withItems(from((props)=>{
+    console.log(`props`, props);
+    return pipe(
+      // combineWith(repoNodes$,repos$),
+      ()=>combine$(of$(props),repoNodes$,repos$),
+      map( ([{id,data:nodeId},repoNodes,repos])=>{
+        // const id = p.data;
+        console.log(`id`, id);
+        console.log(`nodeId`, nodeId);
+        console.log(`repoNodes[nodeId]`, repoNodes[nodeId]);
+        const node = repoNodes[nodeId];
+        const repo = repos[node.repoid];
+        const styles = /*sortBy('width')*/([// should generate these based on selected rules, but select/deselect nodes isn't implemented yet
+          {backgroundColor:reds[4],width:(node.maintainability/repo.maintainabilityMax)*100},
+          {backgroundColor:reds[3],width:(node.effort/repo.effortMax)*100},
+          {backgroundColor:reds[2],width:(node.cyclomatic/repo.cyclomaticMax)*100},
+          // {backgroundColor:reds[1],width:(node.params/repo.paramsMax)*100},
+          // {backgroundColor:reds[0],width:(node.loc/repo.locMax)*100},
+        ]);
+        return styles.map((s,i,c)=>{
+          const lastWidth = i===0 ? 0: c[i-1].width;
+          return Div(withProps({style:{...s,height:`${1/styles.length}em`,width:`${s.width}%`}}));
+        });
+      })
+    )();
   })),
+  // withItems(from(({id,repoNodes,repos})=>{
+  //   const node = repoNodes[id];
+  //   const repo = repos[node.repoid];
+  //   const styles = /*sortBy('width')*/([// should generate these based on selected rules, but select/deselect nodes isn't implemented yet
+  //     {backgroundColor:reds[4],width:(node.maintainability/repo.maintainabilityMax)*100},
+  //     {backgroundColor:reds[3],width:(node.effort/repo.effortMax)*100},
+  //     {backgroundColor:reds[2],width:(node.cyclomatic/repo.cyclomaticMax)*100},
+  //     // {backgroundColor:reds[1],width:(node.params/repo.paramsMax)*100},
+  //     // {backgroundColor:reds[0],width:(node.loc/repo.locMax)*100},
+  //   ]);
+  //   return styles.map((s,i,c)=>{
+  //     const lastWidth = i===0 ? 0: c[i-1].width;
+  //     return Div(withProps({style:{...s,height:`${1/styles.length}em`,width:`${s.width}%`}}));
+  //   });
+  // })),
 );
 
 // problem to solve - mapping data prop to coll id
 // export const repoNodes_exclude_repoid$ = repoNodes_by_repoid$.map(fltrv()groupByKey('repoid'));
 
+// two cases - pass an id (happens by default)
+// pass collection ids pipe(repoNodes_by_repoid(repoNodes).map(outEdgesByRepoNodeId).map(edgeId).toComponents()
+// switch ids take a join collection, pass that id map the current id two cases - pass an id (happens by default)
 // const from$ = (...streamMappers)=>fn=>props=>{
 //   const streams$ = streamMappers.map(s=>isFunction(s)?s(props):s)
 //   return xs.combine(...streams$).map(arr=>fn(...arr));
@@ -356,7 +393,10 @@ const RulesImpactCell = Div(
 //   ({data}:id)=>repoNodes$.map(get(id)),
 //   ({data}:id)=>repoNodes_by_repoid$.map(get(id))
 // })(repo,nodes);
-
+// withItems(converge$(
+//   flatMap(prop=>repoNodes_repoid$.map(get(prop))
+//   pipe(constant(repoNodes$),map(get()flatMap(prop=>repoNodes_repoid$.map(get(prop))
+// ))converge()switchIdFromJoin$(from$())
 const MetricsBody = Div(
   withItems(
     PathHeader,
@@ -364,15 +404,15 @@ const MetricsBody = Div(
     CostPerChange,
     UserImpact,
     pipe(
-      from(({id,repoNodes})=>fltrvToArr(and(matches({repoid:id}),has('code')))(repoNodes)),
+      from(({data,repoNodes})=>fltrvToArr(and(matches({repoid:data}),has('code')))(repoNodes)),
       sortBy('costPerChange'),
       a=>a.reverse(),
       a=>a.slice(0,10),
       mapv(converge([
-        pipe(pick(['id']),toItemProps(GridCellPath)),
-        pipe(pick(['id']),toItemProps(RulesImpactCell)),
-        pipe(get('costPerChange'),toDataProp,toItemProps(GridCellRoundNum)),
-        pipe(get('userImpact'),toDataProp,toItemProps(GridCellRoundNum)),
+        pipe((node)=>({id:node.id,data:node.id}),toItemProps(GridCellPath)),
+        pipe((node)=>console.log('node',node)||({id:node.id,data:node.id,foo:'bar'}),toItemProps(RulesImpactCell)),
+        pipe(({costPerChange})=>({data:costPerChange}),toItemProps(GridCellRoundNum)),
+        pipe(({userImpact})=>({data:userImpact}),toItemProps(GridCellRoundNum)),
       ]))
     )
   ),
@@ -387,11 +427,9 @@ const MetricsBody = Div(
 const TimePerChangeText = Span(withItems(TIME_PER_CHANGE_HELP),v('wsPL'));
 const TimePerChangeHelp = Span(withItems(QMark),withModal(TimePerChangeText));
 const TimePerChangeLabel = Label(withItems('Time Per Change'),h('t0.8'));
-// console.log(`repos_changetime$`, repos_changetime$);
-
 const TimePerChange = TextInput(
-  $defaultValue(repos_changetime$),
-  pipeChanges(from_target_value,to_repos_changetime$),
+  mapProp({defaultValue:repos_changetime_by_id$}),
+  pipeChanges(from_target_value,to_repo_changetime$),
   h('w3')
 );
 
@@ -399,26 +437,26 @@ const DevCostPerHourText = Span(withItems(`Developer Hourly Rate, to calculate c
 const DevCostPerHourHelp = Span(withItems(QMark),withModal(DevCostPerHourText));
 const DevCostPerHourLabel = Label(withItems('Dev Hourly Cost'),h('t0.8'));
 const DevCostPerHour = Input(
-  $defaultValue(repos_devcost$.map(plog(`devcost`))),
-  pipeChanges(from_target_value,to_repos_devcost$),
+  // mapProp({defaultValue:prop=>map(get(`${prop}.devcost`))($repos)}),
+  // mapProp({value:'repos[prop].devcost'}),
+  mapProp({defaultValue:repos_devcost_by_id$}),
+  pipeChanges(from_target_value,to_repo_devcost$),
   h('w3')
 );
 
-const MetricsParams = Div(withItems(pipe(from({data:'id'}),toItemProps(
+const MetricsParams = Div(withItems(pipe(from({id:'id',data:'id'}),toItemProps(
   TimePerChangeLabel, TimePerChangeHelp, TimePerChange,
   DevCostPerHourLabel, DevCostPerHourHelp, DevCostPerHour,
 ))),h('mtAuto'),hi('ml.5'));
 
 const FileMetrics = Div(
-  withItems(passIdTo(MetricsBody,MetricsParams)),
+  withItems(pipe(from({id:'id',data:'id'}),toItemProps(MetricsBody,MetricsParams))),
   v,vi('mb.5')
 );
 
-const RepoMetrics = Div(withItems('TODO'));
-
 const Repo = Div(
   shouldUpdate((p,n)=>p.repos[p.id].url !== n.repos[n.id].url),
-  withItems(passIdTo(TreeSVG,Rules,FileMetrics)),
+  withItems(pipe(from({id:'id',data:'id'}),toItemProps(TreeSVG,Rules,FileMetrics))),
   h('lAIStretch'),hi('nth1mr1 nth2mr1')
 );
 const RepoList = Div(withItems(pipe(from('repos'),mapIdsToItemProps(RepoHeader,Repo))),v,vi('mb.5'));

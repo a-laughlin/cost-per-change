@@ -2,31 +2,37 @@ import {initialState} from './initial-state';
 import {createStore} from 'redux';
 import {setObservableConfig,createEventHandler,mapPropsStream,componentFromStream} from 'recompose';
 import {
-  pipe,compose,mapv,plog as plogg,get,identity,pget,pgetv,ensureArray,set,isObservable,assignAll,
-  mapvToArr,isFunction,ensureFunction,groupByKey
+  pipe,compose,mapv,plog,get,identity,pget,pgetv,ensureArray,set,isObservable,assignAll,
+  mapvToArr,isFunction,ensureFunction,groupByKey,ifElse,isString,cond,stubTrue
 } from './utils';
-import {xs,map,debug,from,combineWith,flatten,flattenConcurrently,flattenSequentially,addListener,
-  addDebugListener,setDebugListener} from './xstream-fp.js';
+import {of$,from$,combine$,map,debug,from,combineWith,flatten,flattenConcurrently,flattenSequentially,addListener,
+  addDebugListener,setDebugListener,dropRepeats,flatMapLatest,flatMap} from './utils$.js';
 import xstreamConfig from 'recompose/xstreamObservableConfig';
 setObservableConfig(xstreamConfig);
 
 
-const plog = pipe(plogg,debug);
-export const joinFactory = ({srcKey='data',destKey='value'}={})=>(coll$,dest=destKey)=>mapPropsStream(pipe(
-  combineWith(coll$),
-  // map((args)=>{
-  //   // console.log(`coll$`, coll$);
-  //   console.log(`args`, args);
-  //   return args;
-  // }),
-  map(([{[srcKey]:data},coll])=>(
-    dest ? {data,[dest]:get(data)(coll)} : {data}
-  )),
-));
-export const $defaultValue=joinFactory({destKey:'defaultValue'});
-export const $value=joinFactory({destKey:'value'});
+const tplRegex = /\[prop\]\.|\.?prop\./g;
+const tpl = s=>prop=>s.replace(tplRegex,`[${prop}].`);
+const ensureStreamGetter = cond([
+  [isFunction,x=>prop=>x(prop)],
+  [isObservable,x=>prop=>map(get(prop))(x)],
+  [isString,x=>prop=>map(tpl(x)(prop))(store$)],
+  [stubTrue,x=>prop=>of$(x)],
+]);
+export const mapPropHocFactory = (dataKey='data')=>obj=>{
+  const keys = Object.keys(obj);
+  const getterFns = Object.values(obj).map(ensureStreamGetter);
+  return mapPropsStream(pipe(
+    flatMap((props)=>combine$(...getterFns.map(fn=>fn(props[dataKey])))),
+    map(latestVals=>latestVals.reduce((acc,v,i)=>{acc[keys[i]]=v;return acc;},{})),
+    debug('afterMapping')
+  ));
+};
+export const mapProp = mapPropHocFactory();
+
 export const from_target_value = pget({value:'target.value',data:'data'});
 // fromStream('helpMessages.0')
+
 // Store only contains collections.  Everything else is derived.
 // collections named like repo,repofile - id property matches the collection
 
@@ -37,42 +43,64 @@ export const from_target_value = pget({value:'target.value',data:'data'});
 // streamClicks(merge(event$,props$,state$),dostuff,to$(isClickedProducer$,state$)))) // publishes an observable to store
 // event.merge(storeInfo).select(storeSlice).map(toNextSlice).merge(storeInfo).publish()
 
-// const rootReducer = (state,action)=>action;
+// possible fns
+// set, merge, remove
+// const setMatchingItems (str,matcher)(value)=>
+// const setMatchingItems (str)(value)=>
+// setProp
+// mergeProp
+// setColls
+// mergeColls
+// removeColls
+// setCollection
+// setCollectionProp
+// setCollectionItem
+// setCollectionItemProp
+// mergeCollection
+// mergeCollectionProp
+// mergeCollectionItem
+// mergeCollectionItemProp
+// removeCollection
+// removeCollectionProp
+// removeCollectionItem
+// removeCollectionItemProp
+// setItemsMatchingId
+// mergeItemsMatchingId
+// removeItemsWithMatchingId
+
 // const tapUpdater = updater=>pipe(plog('prevState'),updater,plog('nextState')),
-const store = createStore(
-  (state=initialState,{updater=identity})=>updater(state),
-  // (state,{updater=identity})=>pipe(plogg('prevState'),updater,plogg('nextState'))(state),
-  // initialState
-);
-// console.log(`store[Symbol.observable]()`, store[Symbol.observable]());
+const store = createStore((state=initialState,{updater=identity})=>updater(state));
+const store$ = from$(store[Symbol.observable]()).startWith(initialState);
 const dispatch = store.dispatch.bind(store);
-const setStateX = str=>data=>{dispatch({type:'fn',updater:state=>set(str,data,state)}); return data; };
+
+
+const setStateX = str=>({value,data=''})=>{dispatch({type:'fn',updater:state=>set(tpl(str)(data),value,state)}); return value; };
 const assignToStateX = data=>{dispatch({type:'fn',updater:state=>Object.assign({},state,...ensureArray(data))});return data;}
 
 
-const store$ = xs.from(store[Symbol.observable]()).startWith(initialState);
-const streamFactory = str=>input$=>{
-  const [collName,propName]=str.split('_');
-  return ({
-    [str+'$']:map((propName?mapv(propName):get(collName)))(input$),
-    [`to_${str}$`]:({value,data})=>setStateX(str.replace('_',`[${data}]`))(value)
-  })
-};
+export const repos$ = map(get('repos'))(store$);
+export const to_repos$ = setStateX('repos');
+// why are these dropRepeats necessary?
+export const repos_devcost_by_id$ = pipe(dropRepeats,map(mapv('devcost')))(repos$);
+export const repos_changetime_by_id$ = pipe(dropRepeats,map(mapv('changetime')))(repos$);
+export const to_repo_devcost$ = setStateX('repos.prop.devcost');
+export const to_repo_changetime$ = setStateX('repos.prop.changetime');
 
 
-// repos
-export const {repos$,to_repos$}=streamFactory('repos')(store$);
-export const {repos_devcost$,to_repos_devcost$}=streamFactory('repos_devcost')(repos$);
-export const {repos_changetime$,to_repos_changetime$}=streamFactory('repos_changetime')(repos$);
+
+// files/directory nodes
+export const [repoNodes$,to_repoNodes$] = [map(get('repoNodes'))(store$),setStateX('repoNodes')];
+export const repoNodes_repoid$ = map(mapv('repoid'))(repoNodes$);
+
+// differently indexed
+export const repoNodes_by_repoid$ = map(groupByKey('repoid'))(repoNodes$);
 
 
-// files
-export const {repoNodes$,to_repoNodes$} = streamFactory('repoNodes')(store$);
-export const {repoNodes_repoid$,to_repoNodes_repoid$} = streamFactory('repoNodes_repoid')(repoNodes$);
-// files selectors
-export const repoNodes_by_repoid$ = repoNodes$.map(groupByKey('repoid'));
 
-
+// file/directory edges
 export const repoNodeOutEdges$ = map(get('repoNodeOutEdges'))(store$);
-export const userTokens$ = map(get('userTokens'))(store$);
-export const helpMessage$ = map(get('helpMessages.0'))(store$);
+export const repoNodeOutEdges_by_repoid$ = map(groupByKey('repoid'))(repoNodeOutEdges$);
+
+// user github token
+export const userToken$ = map(get('userTokens.0.value'))(store$);
+export const to_userToken$ = setStateX('userTokens.0.value');
