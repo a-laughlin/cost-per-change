@@ -43,7 +43,8 @@ import {
 
 import {
   repos$,repos_devcost_by_id$,repos_changetime_by_id$, to_repo_devcost$, to_repo_changetime$,
-  $defaultValue, $value, from_target_value,repoNodes_by_repoid$,mapProp,repoNodes$
+  from_target_value,repoNodes_by_repoid$,mapProp,repoNodes$,repos_id$,repoNodeOutEdges$,
+  userToken$, to_userToken$,prop$,to_repo_copy,to_repo_remove
 } from './dataflow.js';
 import {of$,map,setDebugListener,combineWith,addDebugListener,combine$,fold,debug,debounce,startWith} from './utils$.js';
 
@@ -56,15 +57,15 @@ import {of$,map,setDebugListener,combineWith,addDebugListener,combine$,fold,debu
 
 
 // get our withItems factory, and use it to make sure all children can access state
-const withItems = withItemsHOCFactory({mapAllChildrenProps:pick([statePropKey,statePublishKey])});
-const withItems$ = withItemsHOCFactory({mapAllChildrenProps:pick(['data'])});
+// const withItems = withItemsHOCFactory({mapAllChildrenProps:pick([statePropKey,statePublishKey])});
+const withItems = withItemsHOCFactory({mapAllChildrenProps:pick(['data'])});
 // from basically means fromParent (see itemsToElements in hoc-utils)
 // for consistency, the handler pipes (e.g., pipeClicks) pass props twice so from works
 const from = args=>(_,parentProps)=>polyGet(args)(mergeStateProps(parentProps))
 const mapFrom = selector=>rcMap(p=>({...from(selector)(p,p),...pick([statePropKey,statePublishKey])(p)}));
 const mapColl = collsFns=>(data,props)=>mapv((f,ckey)=>f(props)(from(ckey)(data,props)))(collsFns);
 const shouldUpdate = fn=>rcShouldUpdate((p,n)=>fn({...p,...p[statePropKey]},{...n,...n[statePropKey]}));
-const mapIdsToItemProps = (...Components)=>mapvToArr(pipe(polyGet(['id']),({id})=>({id,data:id}),toItemProps(...Components)));
+// const mapIdsToItemProps = (...Components)=>mapvToArr(pipe(polyGet(['id']),({id})=>({id,data:id}),toItemProps(...Components)));
 const toDataProp = x=>({data:x});
 const passIdTo = (...Components)=>pipe(from({data:'id',id:'id'}),toItemProps(...Components));
 
@@ -93,11 +94,11 @@ const QMark = Span(withItems('?'),
 
 // User / Info Section
 const TokenTextInput = TextInput(
-  mapFrom({defaultValue:'userTokens.0.value'}),
-  pipeChanges(from('target.value'),toState('userTokens.0.value')),
+  mapProp({defaultValue:userToken$}),
+  pipeChanges(pget({value:'target.value',data:'data'}),to_userToken$),
   h('w40 b0 bb1x bcD')
 );
-const TokenTextContainer = Div(withItems(passIdTo(TokenTextInput)),h('lGrow1'));
+const TokenTextContainer = Div(withItems(TokenTextInput),h('lGrow1'));
 const TokenHelpLink = A(
   withProps({target:'blank',href:'https://github.com/settings/tokens'}),
   withItems('github.com/settings/tokens')
@@ -117,9 +118,10 @@ const TokenArea = Div(shouldUpdate(stubFalse),
 
 // Repo Header
 const RepoUrlInput = TextInput(
-  mapFrom({defaultValue:'repos[id].url',id:'id'}),
+  mapProp({defaultValue:'repos[prop].url'}),
   // big friggin pipe.  Could split up.  No need yet.
   pipeChanges(
+    pget({value:'target.value',data:'data'}),
     converge([ // needs debouncing
       mapColl({// remove the current url's nodes
         repoNodes:compose(omitv,matches,polyGet({repoid:'id'})),
@@ -183,46 +185,20 @@ const RepoUrlInput = TextInput(
 
 const RepoUrlHelpText = Span(withItems(REPO_URL_HELP),v('wsPL'));
 const RepoUrlHelpTrigger = Span(withItems(QMark),withModal(RepoUrlHelpText));
-const RepoUrlContainer = Div(withItems(passIdTo(RepoUrlInput)),h('lGrow1'));
+const RepoUrlContainer = Div(withItems(RepoUrlInput),h('lGrow1'));
 const RemRepoButton = Button(withItems('Remove'),
-  pipeClicks(
-    mapColl({
-      repos:compose(omitv,matches,polyGet({id:'id'})),
-      repoNodes:compose(omitv,matches,polyGet({repoid:'id'})),
-      repoNodeOutEdges:compose(omitv,matches,polyGet({repoid:'id'})),
-    }),
-    assignToState
-  ),
+  pipeClicks(get('data'),to_repo_remove)
 );
 const CopyRepoButton = Button(withItems('Copy'),
-  pipeClicks(
-    from(({repos,repoNodes,repoNodeOutEdges,id})=>{
-      const repoid=id+'_1';
-      const re = new RegExp(id,'g');
-      const sRepo=(str)=>str.replace(re,repoid);
-      const transformRepo = (acc,v,k)=>{ acc[k]=v; if(k===id){acc[repoid]={...v,id:repoid,repoid}}};
-      const transformNode = (acc,v,k)=>{
-        acc[k]=v;
-        if (v.repoid===id) {
-          const fid = sRepo(k);
-          acc[fid]={...v,id:fid,repoid};
-          if(v.edges){acc[fid].edges=v.edges.map(sRepo);}
-        };
-      };
-      return {
-        repos:transformToObj(transformRepo)(repos),
-        repoNodes:transformToObj(transformNode)(repoNodes),
-        repoNodeOutEdges:transformToObj(transformNode)(repoNodeOutEdges),
-      };
-    }),
-    assignToState,
-  )
+  pipeClicks(get('data'),to_repo_copy)
 );
 const RepoHeader = Div(
   withItems(
     Label(withItems('GitHub Path')),
     RepoUrlHelpTrigger,
-    passIdTo(RepoUrlContainer,RemRepoButton,CopyRepoButton)
+    RepoUrlContainer,
+    RemRepoButton,
+    CopyRepoButton
   ),
   h('w100% b0 bt1x bSolid bcD brad10x'),hi('ml.5 mr.5 mt.5')
 );
@@ -258,34 +234,32 @@ const TreeComponent = (props)=>{
   </g>
 )}
 const TreeSVG = Svg(
-  withItems(pipe(
-    from(({repoNodeOutEdges,repoNodes,id,repos,[statePublishKey]:pub})=>{
+  withItems(prop$(repoNodeOutEdges$,repoNodes$, repos$)(map(([id,repoNodeOutEdges,repoNodes, repos])=>{
+    repoNodes = fltrv(matches({repoid:id}))(repoNodes);
+    const rootNodes = {...repoNodes};
+    const adjList = mapv((outEdgeObj,nodeKey)=>outEdgeObj.edges.map((edgeKey)=>{
+      delete rootNodes[edgeKey];
+      return repoNodes[edgeKey];
+    }))(repoNodeOutEdges);
 
-      repoNodes = fltrv(matches({repoid:id}))(repoNodes);
-      const rootNodes = {...repoNodes};
-      const adjList = mapv((outEdgeObj,nodeKey)=>outEdgeObj.edges.map((edgeKey)=>{
-        delete rootNodes[edgeKey];
-        return repoNodes[edgeKey];
-      }))(repoNodeOutEdges);
+    // map nodes to tree object with parent, children, height, depth properties
+    const treeObj = d3.hierarchy(Object.values(rootNodes)[0]||{},n=>adjList[n.id]);
 
-      // map nodes to tree object with parent, children, height, depth properties
-      const treeObj = d3.hierarchy(Object.values(rootNodes)[0]||{},n=>adjList[n.id]);
-
-      const width=290;
-      const height=290;
-      const treeLayout = d3.tree().size([height,width])(treeObj) // Set size. Assigns x,y positions
-      treeLayout.x=(height-0.1*height)/2;
-      treeLayout.y=0.1*height;
-      const pathGen = d3.linkHorizontal();
-      const getPath = (parent,node)=>pathGen({source:[node.y,node.x],target:[parent.y,parent.x]});
-      const getColor = pipe(
-        get('data.costPerChange'),
-        ifElse(isUndefined,()=>'#fff',getRedGenerator(repos[id].costPerChangeMin,repos[id].costPerChangeMax))
-      );
-      return {node:treeLayout,parentNode:treeLayout,id,getPath,getColor,[statePublishKey]:pub};
-    }),
-    toItemProps(TreeComponent)
-  )),
+    const width=290;
+    const height=290;
+    const treeLayout = d3.tree().size([height,width])(treeObj) // Set size. Assigns x,y positions
+    treeLayout.x=(height-0.1*height)/2;
+    treeLayout.y=0.1*height;
+    const pathGen = d3.linkHorizontal();
+    const getPath = (parent,node)=>pathGen({source:[node.y,node.x],target:[parent.y,parent.x]});
+    const getColor = pipe(
+      get('data.costPerChange'),
+      ifElse(isUndefined,()=>'#fff',getRedGenerator(repos[id].costPerChangeMin,repos[id].costPerChangeMax))
+    );
+    return toItemProps(TreeComponent)(
+      {node:treeLayout,parentNode:treeLayout,id,getPath,getColor}
+    );
+  }))),
   h('minw300px minh300px')
 );
 
@@ -323,59 +297,31 @@ const UserImpactHelpTrigger = Span(withItems(QMark),withModal(UserImpactText));
 const UserImpact = Span(withItems('User Impact',UserImpactHelpTrigger),h);
 const PathHeader = Span(withItems('Path'));
 
-// const from$ = (...streams)=>fn=>props=>ensureArray(fn(props))
-// mapPropsStream()(na,{data,id})=>componentFromStream(p$={
-//   React.Fragment,{data}
-// });xs.combine(...streams$).map((...streams)=>{
-//   const result = fn(data||id,...streams);
-//   console.log(`result`, result);
-//   return componentFromStream(React.Fragment,ensureArray(result).map(componentFromStream);
-// });
 // Metrics Grid Cells
 const GridCellRoundNum = Span(withItems(pipe(from('data'),round)));
 const GridCellPath = Span(withItems(pipe(from('repoNodes[id].path'),v=>v.replace(/^.+\//g,''))));
+
+
+
 const RulesImpactCell = Div(
-  withItems(from((props)=>{
-    console.log(`props`, props);
-    return pipe(
-      // combineWith(repoNodes$,repos$),
-      ()=>combine$(of$(props),repoNodes$,repos$),
-      map( ([{id,data:nodeId},repoNodes,repos])=>{
-        // const id = p.data;
-        console.log(`id`, id);
-        console.log(`nodeId`, nodeId);
-        console.log(`repoNodes[nodeId]`, repoNodes[nodeId]);
-        const node = repoNodes[nodeId];
-        const repo = repos[node.repoid];
-        const styles = /*sortBy('width')*/([// should generate these based on selected rules, but select/deselect nodes isn't implemented yet
-          {backgroundColor:reds[4],width:(node.maintainability/repo.maintainabilityMax)*100},
-          {backgroundColor:reds[3],width:(node.effort/repo.effortMax)*100},
-          {backgroundColor:reds[2],width:(node.cyclomatic/repo.cyclomaticMax)*100},
-          // {backgroundColor:reds[1],width:(node.params/repo.paramsMax)*100},
-          // {backgroundColor:reds[0],width:(node.loc/repo.locMax)*100},
-        ]);
-        return styles.map((s,i,c)=>{
-          const lastWidth = i===0 ? 0: c[i-1].width;
-          return Div(withProps({style:{...s,height:`${1/styles.length}em`,width:`${s.width}%`}}));
-        });
-      })
-    )();
-  })),
-  // withItems(from(({id,repoNodes,repos})=>{
-  //   const node = repoNodes[id];
-  //   const repo = repos[node.repoid];
-  //   const styles = /*sortBy('width')*/([// should generate these based on selected rules, but select/deselect nodes isn't implemented yet
-  //     {backgroundColor:reds[4],width:(node.maintainability/repo.maintainabilityMax)*100},
-  //     {backgroundColor:reds[3],width:(node.effort/repo.effortMax)*100},
-  //     {backgroundColor:reds[2],width:(node.cyclomatic/repo.cyclomaticMax)*100},
-  //     // {backgroundColor:reds[1],width:(node.params/repo.paramsMax)*100},
-  //     // {backgroundColor:reds[0],width:(node.loc/repo.locMax)*100},
-  //   ]);
-  //   return styles.map((s,i,c)=>{
-  //     const lastWidth = i===0 ? 0: c[i-1].width;
-  //     return Div(withProps({style:{...s,height:`${1/styles.length}em`,width:`${s.width}%`}}));
-  //   });
-  // })),
+  withItems(prop$(repoNodes$,repos$)(map(([prop,repoNodes,repos])=>{
+    const nodeId = prop;
+    console.log(`nodeId`, nodeId);
+    console.log(`repoNodes[nodeId]`, repoNodes[nodeId]);
+    const node = repoNodes[nodeId];
+    const repo = repos[node.repoid];
+    const styles = /*sortBy('width')*/([// should generate these based on selected rules, but select/deselect nodes isn't implemented yet
+      {backgroundColor:reds[4],width:(node.maintainability/repo.maintainabilityMax)*100},
+      {backgroundColor:reds[3],width:(node.effort/repo.effortMax)*100},
+      {backgroundColor:reds[2],width:(node.cyclomatic/repo.cyclomaticMax)*100},
+      // {backgroundColor:reds[1],width:(node.params/repo.paramsMax)*100},
+      // {backgroundColor:reds[0],width:(node.loc/repo.locMax)*100},
+    ]);
+    return styles.map((s,i,c)=>{
+      const lastWidth = i===0 ? 0: c[i-1].width;
+      return Div(withProps({style:{...s,height:`${1/styles.length}em`,width:`${s.width}%`}}));
+    });
+  })))
 );
 
 // problem to solve - mapping data prop to coll id
@@ -437,42 +383,36 @@ const DevCostPerHourText = Span(withItems(`Developer Hourly Rate, to calculate c
 const DevCostPerHourHelp = Span(withItems(QMark),withModal(DevCostPerHourText));
 const DevCostPerHourLabel = Label(withItems('Dev Hourly Cost'),h('t0.8'));
 const DevCostPerHour = Input(
-  // mapProp({defaultValue:prop=>map(get(`${prop}.devcost`))($repos)}),
-  // mapProp({value:'repos[prop].devcost'}),
   mapProp({defaultValue:repos_devcost_by_id$}),
   pipeChanges(from_target_value,to_repo_devcost$),
   h('w3')
 );
 
-const MetricsParams = Div(withItems(pipe(from({id:'id',data:'id'}),toItemProps(
+const MetricsParams = Div(withItems(
   TimePerChangeLabel, TimePerChangeHelp, TimePerChange,
   DevCostPerHourLabel, DevCostPerHourHelp, DevCostPerHour,
-))),h('mtAuto'),hi('ml.5'));
+),h('mtAuto'),hi('ml.5'));
 
 const FileMetrics = Div(
-  withItems(pipe(from({id:'id',data:'id'}),toItemProps(MetricsBody,MetricsParams))),
+  withItems(MetricsBody,MetricsParams,pipe(plog('fileMetrics'),stubNull)),
   v,vi('mb.5')
 );
 
 const Repo = Div(
-  shouldUpdate((p,n)=>p.repos[p.id].url !== n.repos[n.id].url),
-  withItems(pipe(from({id:'id',data:'id'}),toItemProps(TreeSVG,Rules,FileMetrics))),
+  withItems(toItemProps(TreeSVG,Rules/*,FileMetrics*/)),
   h('lAIStretch'),hi('nth1mr1 nth2mr1')
 );
-const RepoList = Div(withItems(pipe(from('repos'),mapIdsToItemProps(RepoHeader,Repo))),v,vi('mb.5'));
 
-
+const RepoList = Div(
+  withItems(prop$(repos$)(map(([p,repos])=>{
+    return mapvToArr(pipe(pget({data:'id'}),toItemProps(RepoHeader,Repo)))(repos)
+  }))),
+  v,vi('mb.5')
+);
 // Header
-const AppLogo = Img(shouldUpdate(stubFalse),withProps({ src:logo, alt:'Cost Per Change Logo'}));
-const AppHeader = Header(shouldUpdate(stubFalse),withItems(AppLogo), h('lAIC lJCC bgF w100%'), hi('h80x') );
-
-
+const AppLogo = Img(withProps({ src:logo, alt:'Cost Per Change Logo'}));
+const AppHeader = Header(withItems(AppLogo), h('lAIC lJCC bgF w100%'), hi('h80x') );
 
 //App
-const App = Div(
-  shouldUpdate(stubFalse),
-  withGlobalState({initialState}),
-  withItems(AppHeader, TokenArea, RepoList,Modal),
-  v, vi('mb1')
-);
+const App = Div(withItems(AppHeader, TokenArea, RepoList,Modal), v, vi('mb1'));
 export default App

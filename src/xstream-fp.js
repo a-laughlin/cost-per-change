@@ -44,15 +44,20 @@ export const tween$ = etween;
 // which is which
 // methods - mutate the existing stream
 // for piping consistency, returning the same stream via , operator
-export const imitate = (...a)=>s=>{s.imitate(...a); return s};
-const ensureDebugListener = ({
+export const getListener = ({
+  next=x=>x,
+  error=x=>{throw Error(x);},
+  complete=x=>x,
+}={})=>({next,error,complete});
+export const getDebugListener = ({
   next = n => console.log('debug next',n),
   error = e => console.error('debug error',e),
   complete = () => console.log('debug complete'),
 }={})=>({next,error,complete});
-export const setDebugListener = (...obj)=>s=>{s.setDebugListener(ensureDebugListener(...obj));return s;};
-export const addDebugListener = (...obj)=>s=>{s.addListener(ensureDebugListener(...obj));return s;}
-export const addListener = (obj)=>s=>{s.addListener(obj);return s;} // return stream for consistent api
+export const addListener = (obj)=>s=>{s.addListener(getListener(obj));return s;} // return stream for consistent api
+export const setDebugListener = (...obj)=>s=>{s.setDebugListener(getDebugListener(...obj));return s;};
+export const addDebugListener = (...obj)=>s=>{s.addListener(getDebugListener(...obj));return s;}
+export const imitate = (...a)=>s=>{s.imitate(...a); return s};
 
 // operators - existing stream unmodified. Receives new stream as a listener.  Return new stream.
 export const debug = (...a)=>s=>s.debug(...a);
@@ -71,7 +76,7 @@ export const shamefullySendComplete = (...a)=>s=>s.shamefullySendComplete(...a);
 export const shamefullySendError = (...a)=>s=>s.shamefullySendError(...a);
 export const shamefullySendNext = (...a)=>s=>s.shamefullySendNext(...a);
 export const startWith = (...a)=>s=>s.startWith(...a); // - returns MemoryStream
-export const subscribe = (...a)=>s=>s.subscribe(...a);
+export const subscribe = (obj)=>s=>s.subscribe(getListener(obj));
 export const take = (...a)=>s=>s.take(...a);
 // these make life easier when working with normal pipes
 export const mergeWith = (...streams)=>stream=>xs.merge(stream,...streams);

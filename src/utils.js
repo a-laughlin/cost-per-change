@@ -40,7 +40,7 @@ export const isKeyMatch = predicate=>(v,k)=>predicate(k);
 export const isValMatch = predicate=>(v,k)=>predicate(v);
 export const isProductionEnv = ()=>process.env.NODE_ENV === 'production';
 export const matches = arity(1)(matchesFP);
-export const isObservable = (x=Object.create(null))=>isFunction(x[$$observable]);
+export const isObservable = x=>x&&isFunction(x[$$observable]);
 // stubs
 export const stubNull = ()=>null;
 export const stubArray = ()=>[];

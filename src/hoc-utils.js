@@ -94,38 +94,32 @@ export const withItemsHOCFactory = (function() {
     [stubTrue,(itm,props)=>console.log(`unknown:`,itm)||createElement('pre',props,`unknown item type passed - received: ${JSON.stringify(itm,null,2)}`)],
   ]);
   const ensureObservable = ifElse(isObservable,identity,of$);
+  const normalizeChildren = pipe(
+    flattenDeep,
+    omitv(isNull),
+    unwrapWhenPossible,
+  );
   return ({
     mapAllChildrenProps = ()=>({}),
     pipeInputTransform = identity,
-  }={}) => argsToArray(ifElse(len0,identity, pipes=>BaseComponent=>parentProps=>{
-    const childrenProps = mapAllChildrenProps(parentProps||{});
+  }={}) => argsToArray(ifElse(len0,identity, pipes=>BaseComponent=>props=>{
+    const childrenProps = mapAllChildrenProps(props||{});
     let hasObs;
     return pipe(
       mapv(itm=>{
-        const elem = itemToElements(itm,childrenProps,parentProps);
+        const elem = itemToElements(itm,childrenProps,props);
         if(isObservable(elem)){hasObs=true;}
         return elem;
       }),
-      flattenDeep,
-      omitv(isNull),
-      ifElse(
-        x=>hasObs===undefined,
-        children=>createElement(BaseComponent,parentProps,unwrapWhenPossible(children)),
-        children=>(
-          createElement(
-            componentFromStream(p$=>{
-              return pipe(
-                map((arg)=>{
-                  const [props,...childrn] = arg;
-                  console.log(`childrn`, childrn);
-                  return createElement(BaseComponent,props,unwrapWhenPossible(childrn||[]));
-                }),
-              )(combine$(p$,...children));
-            }),
-            parentProps
+      children=>hasObs===undefined
+        ? createElement(BaseComponent,props,normalizeChildren(children))
+        : createElement(
+            componentFromStream(pipe(
+              combineWith(...mapv(ensureObservable)(children)),
+              map(([p,...childrn])=>createElement(BaseComponent, p, normalizeChildren(childrn)))
+            )),
+            props
           )
-        )
-      )
     )(pipes);
   }));
 }());
@@ -224,7 +218,7 @@ export const polyGet = cond([
 ]);
 
 
-export const toItemProps = (...Components)=>(data)=>Components.map(C=>({Component:C,props:data}))
+export const toItemProps = (...Components)=>(props)=>Components.map((C,i)=>({Component:C,props,key:(props.data||'')+i}))
 export const toPropFn = key=>(data,props)=>props[key](data);
 
 
