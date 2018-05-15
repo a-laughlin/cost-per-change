@@ -1,17 +1,24 @@
 import {initialState} from './initial-state';
 import {createStore} from 'redux';
-import {setObservableConfig,createEventHandler,mapPropsStream,componentFromStream} from 'recompose';
+import {setObservableConfig,createEventHandler,mapPropsStream,componentFromStream,shallowEqual} from 'recompose';
 import {
   pipe,compose,mapv,plog,get,identity,pget,pgetv,ensureArray,set,isObservable,assignAll,
   mapvToArr,isFunction,ensureFunction,groupByKey,ifElse,isString,cond,stubTrue,transformToObj,
-  omitv,matches
+  omitv,matches,fltrvToObj,isPlainObject,isNumber
 } from './utils';
 import {of$,from$,combine$,map,debug,debounce,from,combineWith,flatten,flattenConcurrently,flattenSequentially,addListener,
   addDebugListener,setDebugListener,dropRepeats,flatMapLatest,flatMap,sampleCombine,getDebugListener,
-  removeListener,getListener,subscribe,fold
+  removeListener,getListener,subscribe,fold,drop,periodic$,filterChangedItems,takeWhenPropChanged,filter
 } from './utils$.js';
-import xstreamConfig from 'recompose/xstreamObservableConfig';
-setObservableConfig(xstreamConfig);
+import {analyse} from './code-analysis';
+import {asyncRepoUrlToGraph} from './api'
+
+export const simpleStore = (initialState={})=>{
+  const {stream,handler}=createEventHandler();
+  const store$ = stream.fold((state,{updater=identity})=>updater(state),initialState);
+  const dispatch = fn=>handler({type:'fn',updater:fn});// mock redux dispatch for compatibility
+  return {store$,dispatch};
+}
 
 
 const tplRegex = /\[prop\]\.|\.?prop\./g;
@@ -34,7 +41,6 @@ export const mapPropHocFactory = (dataKey='data')=>obj=>mapPropsStream(pipe(
   map(get(dataKey)),
   props$(obj),
   debounce(10),
-  // debug('afterMapping')
 ));
 
 export const mapProp = mapPropHocFactory();
@@ -48,6 +54,7 @@ const getHandler = (...fns)=>{
   pipe( ...fns, addListener() )(stream);
   return handler;
 }
+
 // Store only contains collections.  Everything else is derived.
 // collections named like repo,repofile - id property matches the collection
 
@@ -82,16 +89,32 @@ const getHandler = (...fns)=>{
 // setItemsMatchingId
 // mergeItemsMatchingId
 // removeItemsWithMatchingId
-
-// const tapUpdater = updater=>pipe(plog('prevState'),updater,plog('nextState')),
-const store = createStore((state=initialState,{updater=identity})=>updater(state));
-const store$ = from$(store[Symbol.observable]()).startWith(initialState);
+// const t0 = {id:'t0',val:'0'};
+// const t01 = {id:'t0',val:'01'};
+// const t1 = {id:'t1',val:'1'};
+// const tColl={tColl:{t0}};
+const tapUpdater = updater=>pipe(plog('prevState'),updater,plog('nextState'));
+// const tapUpdater = identity;
+// const store = createStore((state=initialState,{updater=identity})=>updater(state));
+Object.assign(initialState.userTokens,{'1':{id:'1',value:'a'}});
+const store = createStore((state,{updater=identity})=>tapUpdater(updater)(state),initialState);
+const store$ = from$(store[Symbol.observable]()).drop(1).startWith(initialState);
 const dispatch = store.dispatch.bind(store);
 
-
+// data is props.data
 const setStateX = str=>({value,data=''})=>{dispatch({type:'fn',updater:state=>set(tpl(str)(data),value,state)}); return value; };
-const assignToStateX = data=>{dispatch({type:'fn',updater:state=>Object.assign({},state,...ensureArray(data))});return data;}
+const assignToStateX = data=>{
+  console.log(`data`, data);
+  dispatch({type:'fn',updater:state=>Object.assign({},state,...ensureArray(data))});return data;
+}
 
+// coll changed
+// const coll =
+// const objs = from$([a0,a0,a0,a1,a1,a1]);
+
+
+// assumes collections will not be added or removed
+// assumes collection items will be added and removed
 
 export const repos$ = map(get('repos'))(store$);
 export const repos_id$ = map(mapv('id'))(repos$);
@@ -112,7 +135,6 @@ export const repoNodes_repoid$ = map(mapv('repoid'))(repoNodes$);
 
 // differently indexed
 export const repoNodes_by_repoid$ = map(groupByKey('repoid'))(repoNodes$);
-
 
 
 // file/directory edges
@@ -159,22 +181,58 @@ export const to_repo_remove = getHandler(
     });
   })
 );
-export const to_repo_url= setStateX('repos.prop.url');
+// export const to_repo_url= setStateX('repos.prop.url');
+export const to_repo_url = getHandler(
+  debounce(500),
+  filter(({value})=>!!value),
+  sampleCombine(repos$,repoNodes$,repoNodeOutEdges$,userToken$),
+  map(([props,allRepos,allrepoNodes,allRepoNodeOutEdges,token])=>{
+    const {data:id,value:url} = props;
+    console.log(`requesting`,{url,id,token});
+    asyncRepoUrlToGraph({url,id,token})
+    .then(({repoNodes:newNodes,repoNodeOutEdges:newEdges})=>{
+      console.log(`received`,newNodes,newEdges);
+      let maxKey,minKey;
+      const repo = {...allRepos[id],url,costPerChangeMax:0,costPerChangeMin:Infinity}; // add url
+      const repos = {...allRepos,[id]:repo};
+      // const omittedNodes = omitv(matches({repoid:id}))(allrepoNodes);
+      // console.log(`omittedNodes`, omittedNodes);
+      const repoNodeOutEdges = {...omitv(matches({repoid:id}))(allRepoNodeOutEdges),...newEdges};
+      const repoNodes = {
+        ...omitv(matches({repoid:id}))(allrepoNodes),
+        ...mapv(node=>{
+          if(!node.code||node.hasOwnProperty('costPerChange')){return node;}
+          const {analysis,code} = analyse(node.path,node.code);
+          const n = {...node,code};
+          mapv((v,k)=>{
+            if(!isNumber(v)){return;}
+            minKey = `${k}Min`;
+            maxKey = `${k}Max`;
+            // storing these values since recalculating on large repos will be expensive.
+            // observables/selectors will make this a lot simpler, combine streams
+            // rather than only calculate on retrieving new nodes
+            if(!repo.hasOwnProperty(minKey)){repo[minKey]=v;}
+            if(!repo.hasOwnProperty(maxKey)){repo[maxKey]=v;}
+            if(repo[minKey]>v){repo[minKey]=v;}
+            if(repo[maxKey]<v){repo[maxKey]=v;}
+            n[k]=v;
+          })(analysis);
+          // this might go negative if maintainability really sucks
+          n.costPerChange = (171-n.maintainability)/1000*repo.devcost*repo.changetime;
+          n.userImpact = n.cyclomatic;//+analysis.params.length/analysis.functions.length
+          if(repo.costPerChangeMin>n.costPerChange){repo.costPerChangeMin=n.costPerChange;}
+          if(repo.costPerChangeMax<n.costPerChange){repo.costPerChangeMax=n.costPerChange;}
+          return n;
+        })(newNodes)
+      };
+      assignToStateX({repos,repoNodes,repoNodeOutEdges})
+    });
+  })
+);
 
-export const getChangedPropStreams = (props=['url'])=>input$=>props.map(p=>{
-  return pipe(
-    fold((last,n)=>{
-      const [ll,ln] = last;
-      if(ln[p]===n[p]){return last};
-      return [ln,n];
-    },[{},{}]),
-    dropRepeats,
-    map(([last,next])=>next)
-  )(input$);
-});
-// with getChangedProps, only check the ones you care about, so extra collection props don't get looped.
+// with takeWhenPropChanged, only check the ones you care about, so extra collection props don't get looped.
 // assumes that when state is set on a nested object, all the parent objects are also copied
-// const [changed_repo_urls$]=getChangedPropStreams(['url'])(repos$);
+// const [changed_repo_urls$]=takeWhenPropChangedStreams(['url'])(repos$);
 // pipe(
 //   x=>changed_repo_urls$,
 //
@@ -203,46 +261,6 @@ export const getChangedPropStreams = (props=['url'])=>input$=>props.map(p=>{
 //       url:from('target.value'),
 //       id:from('id')
 //     }),
-//     ({repos,repoNodes,repoNodeOutEdges,id,url})=>{
-//       // HACKY SECTION - need to recalc values on change instead of storing derived
-//       // need reselect or observables for that
-//       const repo = {...repos[id],url,costPerChangeMax:0,costPerChangeMin:Infinity}; // add url
-//       let maxKey,minKey;
-//       return {
-//         repos:{...repos,[id]:repo},
-//         repoNodeOutEdges,
-//         repoNodes:mapv(node=>{
-//           if(!node.code||node.hasOwnProperty('costPerChange')){return node;}
-//           const {analysis,code} = analyse(node.path,node.code);
-//           const n = {...node,code};
-//           mapv((v,k)=>{
-//             if(!isNumber(v)){return;}
-//             minKey = `${k}Min`;
-//             maxKey = `${k}Max`;
-//             // storing these values since recalculating on large repos will be expensive.
-//             // observables/selectors will make this a lot simpler, combine streams
-//             // rather than only calculate on retrieving new nodes
-//             if(!repo.hasOwnProperty(minKey)){repo[minKey]=v;}
-//             if(!repo.hasOwnProperty(maxKey)){repo[maxKey]=v;}
-//             if(repo[minKey]>v){repo[minKey]=v;}
-//             if(repo[maxKey]<v){repo[maxKey]=v;}
-//             n[k]=v;
-//           })(analysis);
-//           // this might go negative if maintainability really sucks
-//           n.costPerChange = (171-n.maintainability)/1000*repo.devcost*repo.changetime;
-//           n.userImpact = n.cyclomatic;//+analysis.params.length/analysis.functions.length
-//           if(repo.costPerChangeMin>n.costPerChange){repo.costPerChangeMin=n.costPerChange;}
-//           if(repo.costPerChangeMax<n.costPerChange){repo.costPerChangeMax=n.costPerChange;}
-//           return n;
-//         })(repoNodes)
-//       };
-//     },
-//     plog(`after converge`),
-//   ),
-// ]),
-// Promise.all.bind(Promise),
-// assignPropsToArrays,
-// mapv(assignAll),
-// assignToState, // requires pipeAllArgs to get the publish key... can fix with observables and store publish fn.
+
 //
 // )

@@ -21,9 +21,7 @@ import {
   componentFromStream,createEventHandler,mapPropsStream
 } from 'recompose';
 import {getModalComponent,getModalHOC} from './component-modal.js';
-import { analyse} from './code-analysis';
 import {initialState} from './initial-state';
-import {asyncRepoUrlToGraph,getExampleRepo} from './api'
 import * as d3 from 'd3';
 import {schemeReds,scaleOrdinal,interpolateReds} from 'd3-scale-chromatic';
 
@@ -44,9 +42,9 @@ import {
 import {
   repos$,repos_devcost_by_id$,repos_changetime_by_id$, to_repo_devcost$, to_repo_changetime$,
   from_target_value,repoNodes_by_repoid$,mapProp,repoNodes$,repos_id$,repoNodeOutEdges$,
-  userToken$, to_userToken$,prop$,to_repo_copy,to_repo_remove
+  userToken$, to_userToken$,prop$,to_repo_copy,to_repo_remove,to_repo_url
 } from './dataflow.js';
-import {of$,map,setDebugListener,combineWith,addDebugListener,combine$,fold,debug,debounce,startWith} from './utils$.js';
+import {of$,map,setDebugListener,sampleCombine,combineWith,addDebugListener,combine$,fold,debug,debounce,startWith} from './utils$.js';
 
 // TODO: Repo loading spinner.
 // TODO: Token field flash red if try to load a repo without a token.
@@ -118,71 +116,10 @@ const TokenArea = Div(shouldUpdate(stubFalse),
 
 // Repo Header
 const RepoUrlInput = TextInput(
-  mapProp({defaultValue:'repos[prop].url'}),
-  // big friggin pipe.  Could split up.  No need yet.
-  pipeChanges(
-    pget({value:'target.value',data:'data'}),
-    converge([ // needs debouncing
-      mapColl({// remove the current url's nodes
-        repoNodes:compose(omitv,matches,polyGet({repoid:'id'})),
-        repoNodeOutEdges:compose(omitv,matches,polyGet({repoid:'id'})),
-      }),
-      pipeAllArgsAsync( // get new nodes, set new nodes + new url
-        from({url:'target.value',id:'id',token:'userTokens.0.value'}),
-        plog(`allArgsAsync`),
-        asyncRepoUrlToGraph, // get new repoNodes and repoNodeOutEdges for this repo
-        converge({
-          repoNodes:get('repoNodes'),
-          repoNodeOutEdges:get('repoNodeOutEdges'),
-          repos:from('repos'),
-          url:from('target.value'),
-          id:from('id')
-        }),
-        ({repos,repoNodes,repoNodeOutEdges,id,url})=>{
-          // HACKY SECTION - need to recalc values on change instead of storing derived
-          // need reselect or observables for that
-          const repo = {...repos[id],url,costPerChangeMax:0,costPerChangeMin:Infinity}; // add url
-          let maxKey,minKey;
-          return {
-            repos:{...repos,[id]:repo},
-            repoNodeOutEdges,
-            repoNodes:mapv(node=>{
-              if(!node.code||node.hasOwnProperty('costPerChange')){return node;}
-              const {analysis,code} = analyse(node.path,node.code);
-              const n = {...node,code};
-              mapv((v,k)=>{
-                if(!isNumber(v)){return;}
-                minKey = `${k}Min`;
-                maxKey = `${k}Max`;
-                 // storing these values since recalculating on large repos will be expensive.
-                 // observables/selectors will make this a lot simpler, combine streams
-                 // rather than only calculate on retrieving new nodes
-                if(!repo.hasOwnProperty(minKey)){repo[minKey]=v;}
-                if(!repo.hasOwnProperty(maxKey)){repo[maxKey]=v;}
-                if(repo[minKey]>v){repo[minKey]=v;}
-                if(repo[maxKey]<v){repo[maxKey]=v;}
-                n[k]=v;
-              })(analysis);
-              // this might go negative if maintainability really sucks
-              n.costPerChange = (171-n.maintainability)/1000*repo.devcost*repo.changetime;
-              n.userImpact = n.cyclomatic;//+analysis.params.length/analysis.functions.length
-              if(repo.costPerChangeMin>n.costPerChange){repo.costPerChangeMin=n.costPerChange;}
-              if(repo.costPerChangeMax<n.costPerChange){repo.costPerChangeMax=n.costPerChange;}
-              return n;
-            })(repoNodes)
-          };
-        },
-        plog(`after converge`),
-      ),
-    ]),
-    Promise.all.bind(Promise),
-    assignPropsToArrays,
-    mapv(assignAll),
-    assignToState, // requires pipeAllArgs to get the publish key... can fix with observables and store publish fn.
-  ),
+  mapProp({defaultValue:'repos[prop].url',data:(d)=>of$(d)}),// shouldn't need to specify data prop
+  pipeChanges( pget({value:'target.value',data:'data'}),to_repo_url),
   h('t1em w100% b0 bb1x')
 );
-
 const RepoUrlHelpText = Span(withItems(REPO_URL_HELP),v('wsPL'));
 const RepoUrlHelpTrigger = Span(withItems(QMark),withModal(RepoUrlHelpText));
 const RepoUrlContainer = Div(withItems(RepoUrlInput),h('lGrow1'));
