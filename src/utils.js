@@ -7,7 +7,7 @@ import {
   isInteger,isError,isNumber,isObjectLike,hasIn,has,isWeakMap, isWeakSet, isMap, isSet,isEmpty,
   isString, isPlainObject, isFunction, isNull,isUndefined,set,unset,curry,mergeAllWith as mergeAllWithFP,mergeAll as mergeAllFP,
   omitBy,rearg,rangeStep,assignAll as assignAllFP,assignAllWith as assignAllWithFP,ary as arity,
-  unary,sortBy,keyBy,kebabCase,size,partition,every
+  unary,sortBy,keyBy,kebabCase,size,partition,every,values,keys
 } from 'lodash/fp';
 import {merge,mergeWith,set as _set,debounce as _debounce,memoize as _memoize} from 'lodash';
 import $$observable from 'symbol-observable';
@@ -21,7 +21,7 @@ export {
   findKey,uniqueId,findIndex,set,mergeWith,reject,concat,constant,flatMap,flattenDeep,omit,
   isInteger,isError,isNumber,isObjectLike,hasIn,has,isWeakMap, isWeakSet, isMap, isSet,isEmpty,
   isString, isPlainObject, isFunction, isNull,isUndefined,_set,unset,pickBy,curry,omitBy,sortBy,
-  rearg,rangeStep,over,kebabCase,size,partition,every
+  rearg,rangeStep,over,kebabCase,size,partition,every,values,keys
 }
 
 
@@ -242,37 +242,29 @@ export const cycle = (...args)=>{ // cycles between all values passed in
 
 
 // collections
-export const toArr = (fn,predicate=stubTrue)=>coll=>(transform((a,val,key,c)=>{
-  if(predicate(a,val,key,c)){a[a.length]=fn(a,val,key,c)}
-},[])(coll));
-export const toObj = (fn,predicate=stubTrue)=>coll=>transform(ifElse(predicate,fn,noop),{})(coll);
-// collection functions that always output to Obj
-export const mapvToObjv = fn=>coll=>transform((a,val,key,c)=>a[key]=fn(val,key,c),{})(coll);// equivalent to _.mapValues, but works on arrays
-// collection functions that always output to Array
-export const mapvToArr = map;
-export const mapkToArr = pipe(rearg([1,0,2]),map);
-export const fltrvToArr = filter;
-// collection functions that retain the collection type
-export const tranToArr = fn=>(...args)=>transform(fn,[])(...args);
-export const tranToObj = fn=>(...args)=>transform(fn,{})(...args);
-export const tran = transform;
-export const fltrv = predicate=>coll=>(isArray(coll)?filter:pickBy)(predicate)(coll);
-export const fltrk = rearg([1,0,2],fltrv);
-export const omitv = pipe(not,fltrv);
-export const omitk = pipe(not,fltrk);
-export const mapv = fn=>ifElse(isArray,map(fn),mapValues(fn));
-export const mapk = rearg([1,0,2],mapv);
-export const fltrMapvToArr = (predicate,fn)=>(...args)=>transform((a,v,k,c)=>{
-  if(predicate(v,k,c)){a[a.length]=fn(v,k,c)};
-},[])(...args);
-export const fltrMapvToObjv = (predicate,fn)=>(...args)=>transform((a,v,k,c)=>{
-  if(predicate(v,k,c)){a[k]=fn(v,k,c)};
-},{})(...args);
-export const fltrMapv = (predicate,fn)=>ifElse(isArray,fltrMapvToArr,fltrMapvToObjv)(predicate,fn)
-
-export const values = (arg={})=>isFunction(arg.values)?arg.values():Object.values(arg);
-export const keys = (arg={})=>isFunction(arg.keys)?arg.keys():Object.keys(arg);
-// console.log(`mapvToArr()({a:'b',c:'d'})`, mapvToArr()({a:'b',c:'d'}));
+// shortcuts for the most common collection operations
+// prefixes = r,m,f,o,fm = reduce,map,filter,omit,filter+map
+// suffixes = o,a,x = toObject,toArray,toX (where X is the same type as input)
+export const ro=fn=>(...args)=>transform(fn,{})(...args);
+export const ra=fn=>(...args)=>transform(fn,[])(...args);
+export const ma=map;
+export const mo=fn=>ifElse(isArray,ro((acc,v,i,c)=>{acc[i]=fn(v,i,c);}),mapValues)(fn);
+export const mx=fn=>coll=>(isArray(coll)?map:mapValues)(fn)(coll);
+export const fa=filter;
+export const fo=pred=>ifElse(
+  isArray,ra((acc,v,k,c)=>{if(pred(v,k,c)){acc[acc.length]=v;}}),pickBy(pred));
+export const fx=pred=>coll=>(isArray(coll)?fa:pickBy)(pred)(coll);
+export const oa=pipe(not,fa);
+export const oo=pipe(not,fo);
+export const ox=pipe(not,fx);
+export const fma=(pred,fn)=>ra((acc,v,k,c)=>{if(pred(v,k,c)){acc[acc.length]=fn(v,k,c);}});
+export const fmo=(pred,fn)=>ro((acc,v,k,c)=>{if(pred(v,k,c)){acc[k]=fn(v,k,c);}});
+export const fmx=(pred,fn)=>coll=>(isArray(coll)?fma:fmo)(pred,fn)(coll);
+// legacy
+export const mapvToArr = ma;
+export const fltrv = fx;
+export const omitv = ox;
+export const mapv = mx;
 
 
 export const sort = (...args)=>arr=>arr.sort(...args)

@@ -9,7 +9,7 @@ import {
   get, transform,flatten,find,mapValues,flattenDeep,flatMap, compose,reduce,cond,pipeAsync,pick,
   omit,ensureArray,plog,isNumber,isFalsy,stubNull,len0,len1,first,over,set,condNoExec,not,mapv,
   argsToArray,arrayToArgs,acceptsArgsOrArray,curry,isArray,unset,toEmptyCopy,isObservable,
-  mapvToObjv,ensureFunction,constant,omitv,pipeAllArgsAsync,and,isProductionEnv,ifElse,has,every
+  mapvToObjv,ensureFunction,constant,omitv,pipeAllArgsAsync,and,isProductionEnv,ifElse,has,every,ra
 
 } from './utils';
 import {of$,from$,take,combine$,map,toArray,periodic$,flatMap as flatMap$,combineWith,
@@ -72,9 +72,11 @@ export const withItemsHOCFactory = (function() {
   const ensureKeys = ifElse(not(hasKey),cloneWithKey);
   const unwrapSingles = cond([
     [len0,stubNull],
-    [len1,pipe(first,ifElse(isArray,unwrapSingles,identity))],
+    [len1,first],
     [stubTrue,mapv(ensureKeys)],
   ]);
+  const unwrap = ra((acc,next)=>{if(!isUndefOrNull(next)){acc.push(...ensureArray(next));}});
+
   const xToElements = cond([
     [isUndefOrNull,stubNull],
     [isValidElement,identity],//(elem,props)=>cloneElement(elem,props)],
@@ -95,16 +97,18 @@ export const withItemsHOCFactory = (function() {
   ));
   return ({
     mapAllChildrenProps = ()=>({}),
-  }={}) => (...pipes)=>pipes.length===0 ? identity : BaseComponent=>props=>pipe(
-    normalizePipes(mapAllChildrenProps(props||{})),
-    (arr)=>Elem(
-      componentFromStream(pipe(
-        combineWith(...arr),
-        map(([p,...children])=>Elem(BaseComponent, p, pipe(flattenDeep, omitv(isNull), unwrapSingles )(children)))
-      )),
-      props
-    )
-  )(pipes)
+  }={}) => (...pipes)=>pipes.length===0
+    ? identity
+    : BaseComponent=>props=>pipe(
+      normalizePipes(mapAllChildrenProps(props||{})),
+      arr=>Elem(
+        componentFromStream(pipe(
+          combineWith(...arr),
+          map(([p,...children])=>Elem(BaseComponent, p, pipe(unwrap,unwrapSingles)(children)))
+        )),
+        props
+      )
+    )(pipes)
 }());
 
 

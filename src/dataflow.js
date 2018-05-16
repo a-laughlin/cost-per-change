@@ -4,7 +4,7 @@ import {setObservableConfig,createEventHandler,mapPropsStream,componentFromStrea
 import {
   pipe,compose,mapv,plog,get,identity,pget,pgetv,ensureArray,set,isObservable,assignAll,
   mapvToArr,isFunction,ensureFunction,groupByKey,ifElse,isString,cond,stubTrue,transformToObj,
-  omitv,matches,fltrvToObj,isPlainObject,isNumber,tranToObj
+  omitv,matches,fltrvToObj,isPlainObject,isNumber,ro
 } from './utils';
 import {of$,from$,combine$,map,debug,debounce,from,combineWith,flatten,flattenConcurrently,flattenSequentially,addListener,
   addDebugListener,setDebugListener,dropRepeats,flatMapLatest,flatMap,sampleCombine,getDebugListener,
@@ -155,13 +155,13 @@ export const repos_by_repoNode_id$ = store$
 // why didn't it work to use combine$ or combineWith?  Why directly from the store$?
 .map(({repoNodes,repos})=>mapv(n=>repos[n.repoid])(repoNodes));
 
-export const repoNodes_by_repoid$ = map(tranToObj((acc,n,nid)=>{
+export const repoNodes_by_repoid$ = map(ro((acc,n,nid)=>{
   const {repoid,id} = n
   acc[repoid] || (acc[repoid] = {});
   acc[repoid][id]=n;
 }))(repoNodes$);
 
-export const repoNodeOutEdges_by_repoid$ = map(tranToObj((acc,edge)=>{
+export const repoNodeOutEdges_by_repoid$ = map(ro((acc,edge)=>{
   const {repoid,id} = edge;
   acc[repoid] || (acc[repoid] = {});
   acc[repoid][id]=edge;

@@ -12,7 +12,7 @@ import {
   fltrv, fltrk,mapkToObjk, mapvToObjk, mapvToObjv, mapvToArr, mapkToArr,values,condNoExec as condnx,
   is,ifElse,cond,isArray,stubTrue,isFunction,ensureFunction,stubNull,tranToArr,and,converge, omitv, assignAll,
   fltrMapvToArr,pipeAllArgs,stubObject,isUndefined,not,stubFalse,round,memoize,sortBy,keyBy,
-  isPlainObject,isString,kebabCase,pipeAsync,size,fltrvToArr,pipeAllArgsAsync,isNumber,ifError,logAndThrow,
+  isPlainObject,isString,kebabCase,pipeAsync,size,fa,pipeAllArgsAsync,isNumber,ifError,logAndThrow,
   pget,pgetv,isNull,reverse,slice
 } from './utils.js';
 
@@ -251,7 +251,7 @@ const MetricsBody = Div(
     CostPerChange,
     UserImpact,
     pipeIndex(repoNodes_by_repoid$)(
-      fltrvToArr(has('code')),
+      fa(has('code')),
       sortBy('costPerChange'),
       reverse,
       slice(0,10),
