@@ -44,14 +44,6 @@ const mapPropFactory = (dataKey='data')=>obj=>{
 }
 export const mapProp = mapPropFactory();
 
-export const pipeProp$ = (...streams)=>(...fns)=>(props)=>{
-  return pipe(...fns)(combine$(of$(props.data),...streams));
-};
-export const pipeIndex = (...streams$)=>(...fns)=>props=>{
-  return combine$(of$(props.data),...streams$).map(
-    ([prop,...streams])=>pipe(...fns)(...streams.map(s=>s[prop]))
-  );
-};
 export const from_target_value = pget({value:'target.value',data:'data'});
 
 const getHandler = (...fns)=>{
@@ -121,11 +113,11 @@ const assignToStateX = data=>{
 // assumes collections will not be added or removed
 // assumes collection items will be added and removed
 
-export const repos$ = map(get('repos'))(store$);
+export const repos$ = pipe(map(get('repos')))(store$);
 export const repos_id$ = map(mapv('id'))(repos$);
 // why are these dropRepeats necessary?
-export const repos_devcost_by_id$ = pipe(dropRepeats,map(mapv('devcost')))(repos$);
-export const repos_changetime_by_id$ = pipe(dropRepeats,map(mapv('changetime')))(repos$);
+export const repos_devcost_by_id$ = pipe(map(mapv('devcost')))(repos$);
+export const repos_changetime_by_id$ = pipe(map(mapv('changetime')))(repos$);
 export const repos_url_by_id$ = pipe(dropRepeats,map(mapv('url')))(repos$);
 export const to_repos$ = setStateX('repos');
 export const to_repo_devcost$ = setStateX('repos.prop.devcost');
@@ -135,7 +127,8 @@ export const to_repo_url$ = setStateX('repos.prop.url');
 
 
 // files/directory nodes
-export const [repoNodes$,to_repoNodes$] = [map(get('repoNodes'))(store$),setStateX('repoNodes')];
+export const repoNodes$ = pipe(map(get('repoNodes')))(store$);
+export const to_repoNodes$ = setStateX('repoNodes');
 export const repoNodes_costPerChange$ = map(mapv('costPerChange'))(repoNodes$);
 export const repoNodes_userImpact$ = map(mapv('userImpact'))(repoNodes$);
 export const repoNodes_path$ = map(mapv('path'))(repoNodes$);
@@ -147,13 +140,48 @@ export const repoNodeOutEdges$ = map(get('repoNodeOutEdges'))(store$);
 export const userToken$ = map(get('userTokens.0.value'))(store$);
 export const to_userToken$ = setStateX('userTokens.0.value');
 
-
+// analyses
+export const nodeAnalyses$ = pipe(
+  map(({repoNodes,repos})=>{
+    const repoData = {costPerChangeMax:0,costPerChangeMin:Infinity};
+    let minKey,maxKey;
+    return ro((acc,node)=>{
+      if(!node.code){return;}
+      repoData.devcost = repos[node.repoid].devcost;
+      repoData.changetime = repos[node.repoid].devcost;
+      const {analysis,code} = analyse(node.path,node.code);
+      const n = {...node,code};
+      mapv((v,k)=>{
+        if(!isNumber(v)){return;}
+        minKey = `${k}Min`;
+        maxKey = `${k}Max`;
+        if(!repoData.hasOwnProperty(minKey)){repoData[minKey]=v;}
+        if(!repoData.hasOwnProperty(maxKey)){repoData[maxKey]=v;}
+        if(repoData[minKey]>v){repoData[minKey]=v;}
+        if(repoData[maxKey]<v){repoData[maxKey]=v;}
+        n[k]=v;
+      })(analysis);
+      // this might go negative if maintainability really sucks
+      n.costPerChange = (171-n.maintainability)/1000*repoData.devcost*repoData.changetime;
+      n.userImpact = n.cyclomatic;//+analysis.params.length/analysis.functions.length
+      if(repoData.costPerChangeMin>n.costPerChange){repoData.costPerChangeMin=n.costPerChange;}
+      if(repoData.costPerChangeMax<n.costPerChange){repoData.costPerChangeMax=n.costPerChange;}
+      acc[n.id] = Object.assign(n,repoData,{id:n.id,repoid:n.repoid});
+    })(repoNodes);
+  })
+)(store$);
 
 
 // joins
 export const repos_by_repoNode_id$ = store$
 // why didn't it work to use combine$ or combineWith?  Why directly from the store$?
 .map(({repoNodes,repos})=>mapv(n=>repos[n.repoid])(repoNodes));
+
+export const nodeAnalyses_by_repoid$ = map(ro((acc,n,nid)=>{
+  const {repoid,id} = n
+  acc[repoid] || (acc[repoid] = {});
+  acc[repoid][id]=n;
+}))(nodeAnalyses$);
 
 export const repoNodes_by_repoid$ = map(ro((acc,n,nid)=>{
   const {repoid,id} = n
@@ -216,42 +244,17 @@ export const to_repo_url = getHandler(
     .then(({repoNodes:newNodes,repoNodeOutEdges:newEdges})=>{
       console.log(`received`,newNodes,newEdges);
       let maxKey,minKey;
-      const repo = {...allRepos[id],url,costPerChangeMax:0,costPerChangeMin:Infinity}; // add url
+      const repo = {...allRepos[id],url}; // add url
       const repos = {...allRepos,[id]:repo};
       // const omittedNodes = omitv(matches({repoid:id}))(allrepoNodes);
       // console.log(`omittedNodes`, omittedNodes);
       const repoNodeOutEdges = {...omitv(matches({repoid:id}))(allRepoNodeOutEdges),...newEdges};
-      const repoNodes = {
-        ...omitv(matches({repoid:id}))(allrepoNodes),
-        ...mapv(node=>{
-          if(!node.code||node.hasOwnProperty('costPerChange')){return node;}
-          const {analysis,code} = analyse(node.path,node.code);
-          const n = {...node,code};
-          mapv((v,k)=>{
-            if(!isNumber(v)){return;}
-            minKey = `${k}Min`;
-            maxKey = `${k}Max`;
-            // storing these values since recalculating on large repos will be expensive.
-            // observables/selectors will make this a lot simpler, combine streams
-            // rather than only calculate on retrieving new nodes
-            if(!repo.hasOwnProperty(minKey)){repo[minKey]=v;}
-            if(!repo.hasOwnProperty(maxKey)){repo[maxKey]=v;}
-            if(repo[minKey]>v){repo[minKey]=v;}
-            if(repo[maxKey]<v){repo[maxKey]=v;}
-            n[k]=v;
-          })(analysis);
-          // this might go negative if maintainability really sucks
-          n.costPerChange = (171-n.maintainability)/1000*repo.devcost*repo.changetime;
-          n.userImpact = n.cyclomatic;//+analysis.params.length/analysis.functions.length
-          if(repo.costPerChangeMin>n.costPerChange){repo.costPerChangeMin=n.costPerChange;}
-          if(repo.costPerChangeMax<n.costPerChange){repo.costPerChangeMax=n.costPerChange;}
-          return n;
-        })(newNodes)
-      };
+      const repoNodes = {...omitv(matches({repoid:id}))(allrepoNodes), ...newNodes};
       assignToStateX({repos,repoNodes,repoNodeOutEdges})
     });
   })
 );
+
 
 // with takeWhenPropChanged, only check the ones you care about, so extra collection props don't get looped.
 // assumes that when state is set on a nested object, all the parent objects are also copied

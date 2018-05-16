@@ -43,41 +43,34 @@ import {
   repos$,repos_devcost_by_id$,repos_changetime_by_id$, to_repo_devcost$, to_repo_changetime$,
   from_target_value,repoNodes_by_repoid$,mapProp,repoNodes$,repos_id$,repoNodeOutEdges$,
   userToken$, to_userToken$,to_repo_copy,to_repo_remove,to_repo_url,repoNodeOutEdges_by_repoid$,
-  pipeIndex,repoNodes_costPerChange$,repoNodes_userImpact$,repos_by_repoNode_id$,pipeCollection,
-  repoNodes_path$,mapCollectionKeys
+  repoNodes_costPerChange$,repoNodes_userImpact$,repos_by_repoNode_id$,pipeCollection,
+  repoNodes_path$,nodeAnalyses$,nodeAnalyses_by_repoid$
 } from './dataflow.js';
-import {of$,map,setDebugListener,sampleCombine,combineWith,addDebugListener,combine$,fold,debug,debounce,startWith} from './utils$.js';
+import {of$,map,setDebugListener,sampleCombine,combineWith,addDebugListener,combine$,fold,debug,
+  debounce,dropRepeats} from './utils$.js';
 
 // TODO: Repo loading spinner.
 // TODO: Token field flash red if try to load a repo without a token.
 // TODO: LocalStorage token.
 // TODO: Stacked bar chart in table - current vs. optimal
 // TODO: Repo metrics - maybe as background behind stacked bar.
-// TODO: convert components to streamed - creates a dependency, but so does anything else to attach state
 
-
-// get our withItems factory, and use it to make sure all children can access state
-// const withItems = withItemsHOCFactory({mapAllChildrenProps:pick([statePropKey,statePublishKey])});
+// great modal styling article
+// https://css-tricks.com/considerations-styling-modal/
+// HOCs
+const withModal = getModalHOC();
 const withItems = withItemsHOCFactory({mapAllChildrenProps:pick(['data'])});
-// from basically means fromParent (see itemsToElements in hoc-utils)
-// for consistency, the handler pipes (e.g., pipeClicks) pass props twice so from works
-const from = args=>(_,parentProps)=>polyGet(args)(mergeStateProps(parentProps))
-const mapFrom = selector=>rcMap(p=>({...from(selector)(p,p),...pick([statePropKey,statePublishKey])(p)}));
-// const mapIdsToItemProps = (...Components)=>mapvToArr(pipe(polyGet(['id']),({id})=>({id,data:id}),toItemProps(...Components)));
-const setProp = str=>(...Components)=>pipe(({[str]:data})=>({data}),toItemProps(...Components));
-const mapIdsTo = compose(mapvToArr,setProp('id'));
+
+
 // Reds Scale Generator
 const reds = slice(0,5)(schemeReds[8]);
 const getRedGenerator = (min,max)=>d3.scaleQuantize().domain([min, max]).range(reds);
 const scaleRed = getRedGenerator(0,4);
 // const continuousReds = d3.scaleSequential(interpolateReds);
 // const discreteReds = d3.scaleOrdinal(schemeReds[5])
-// could make this more intuitive, comparing across domains, if the numbers were fixed... but... insufficient time.
 
 
-// great modal styling article
-// https://css-tricks.com/considerations-styling-modal/
-const [Modal,withModal] = [getModalComponent(),getModalHOC()];
+
 
 // Random Util Element
 const QMark = Span(withItems('?'),
@@ -157,34 +150,39 @@ const TreeComponent = ({node,parentNode,id,getPath,getColor})=>(
 );
 
 const TreeSVG = Svg(
-  withItems(pipeIndex(repoNodeOutEdges_by_repoid$,repoNodes_by_repoid$, repos$)(
-    (repoNodeOutEdges,repoNodes, repo)=>{
-    const rootNodes = {...repoNodes};
-    const adjList = mapv((outEdgeObj,nodeKey)=>outEdgeObj.edges.map((edgeKey)=>{
-      delete rootNodes[edgeKey];
-      return repoNodes[edgeKey];
-    }))(repoNodeOutEdges);
+  withItems(pipe(
+    ({data:repoid})=>combine$(repoNodeOutEdges_by_repoid$,repoNodes_by_repoid$, nodeAnalyses_by_repoid$).map(mapv(get(repoid))),
+    map(([repoNodeOutEdges,repoNodes, analyses])=>{
+      const rootNodes = {...repoNodes};
+      const adjList = mapv((outEdgeObj,nodeKey)=>outEdgeObj.edges.map((edgeKey)=>{
+        delete rootNodes[edgeKey];
+        return repoNodes[edgeKey];
+      }))(repoNodeOutEdges);
 
-    // map nodes to tree object with parent, children, height, depth properties
-    const treeObj = d3.hierarchy(Object.values(rootNodes)[0]||{},n=>adjList[n.id]);
+      // map nodes to tree object with parent, children, height, depth properties
+      const treeObj = d3.hierarchy(Object.values(rootNodes)[0]||{},n=>adjList[n.id]);
 
-    const width=290;
-    const height=290;
-    const treeLayout = d3.tree().size([height,width])(treeObj) // Set size. Assigns x,y positions
-    treeLayout.x=(height-0.1*height)/2;
-    treeLayout.y=0.1*height;
-    const pathGen = d3.linkHorizontal();
-    const getPath = (parent,node)=>pathGen({source:[node.y,node.x],target:[parent.y,parent.x]});
-    const getColor = pipe(
-      get('data.costPerChange'),
-      ifElse(isUndefined,()=>'#fff',getRedGenerator(repo.costPerChangeMin,repo.costPerChangeMax))
-    );
-    return toItemProps(TreeComponent)(
-      {node:treeLayout,parentNode:treeLayout,id:repo.id,getPath,getColor}
-    );
-  })),
+      const width=290;
+      const height=290;
+      const treeLayout = d3.tree().size([height,width])(treeObj) // Set size. Assigns x,y positions
+      treeLayout.x=(height-0.1*height)/2;
+      treeLayout.y=0.1*height;
+      const pathGen = d3.linkHorizontal();
+      const getPath = (parent,node)=>pathGen({source:[node.y,node.x],target:[parent.y,parent.x]});
+      const getColor = ({data:node})=>{
+        const analysis = analyses[node.id];
+        if(isUndefined(analysis)){return '#fff';}
+        const {costPerChange,costPerChangeMin,costPerChangeMax} = analysis;
+        return getRedGenerator(costPerChangeMin,costPerChangeMax)(costPerChange)
+      };
+      return toItemProps(TreeComponent)(
+        {node:treeLayout,parentNode:treeLayout,id:treeLayout.data.repoid,getPath,getColor}
+      );
+    })
+  )),
   h('minw300px minh300px')
 );
+
 
 
 
@@ -222,17 +220,24 @@ const UserImpact = Span(withItems('User Impact',UserImpactHelpTrigger),h);
 const PathHeader = Span(withItems('Path'));
 
 // Metrics Grid Cells
-const GridCellCostPerChange = Span(withItems(pipeIndex(repoNodes_costPerChange$)(round)));
-const GridCellUserImpact = Span(withItems(pipeIndex(repoNodes_userImpact$)(round)));
-const GridCellPath = Span(withItems(pipeIndex(repoNodes_path$)(v=>v.replace(/^.+\//g,''))));
+const GridCellCostPerChange = Span(withItems(
+  ({data:nodeid})=>nodeAnalyses$.map(pipe(get(nodeid),get(`costPerChange`),round)),
+));
+const GridCellUserImpact = Span(withItems(
+  ({data:nodeid})=>nodeAnalyses$.map(pipe(get(nodeid),get(`costPerChange`),round)),
+));
+const GridCellPath = Span(withItems(
+  ({data:nodeid})=>repoNodes$.map(pipe(get(nodeid),get(`path`),v=>v.replace(/^.+\//g,''))),
+));
 const GridCellRulesImpact = Div(
-  withItems(
-    // pipe(plog('GridCellRulesImpact'),stubNull),
-    pipeIndex(repos_by_repoNode_id$,repoNodes$)((repo,node)=>{
+  withItems(pipe(
+    ({data:nodeid})=>nodeAnalyses$.map(get(nodeid)),
+    dropRepeats,
+    map((node)=>{
       const styles = ([// should generate these based on selected rules, but select/deselect nodes isn't implemented yet
-        {backgroundColor:reds[4],width:(node.maintainability/repo.maintainabilityMax)*100},
-        {backgroundColor:reds[3],width:(node.effort/repo.effortMax)*100},
-        {backgroundColor:reds[2],width:(node.cyclomatic/repo.cyclomaticMax)*100},
+        {backgroundColor:reds[4],width:(node.maintainability/node.maintainabilityMax)*100},
+        {backgroundColor:reds[3],width:(node.effort/node.effortMax)*100},
+        {backgroundColor:reds[2],width:(node.cyclomatic/node.cyclomaticMax)*100},
         // {backgroundColor:reds[1],width:(node.params/repo.paramsMax)*100},
         // {backgroundColor:reds[0],width:(node.loc/repo.locMax)*100},
       ]);
@@ -240,27 +245,29 @@ const GridCellRulesImpact = Div(
         const lastWidth = i===0 ? 0: c[i-1].width;
         return Div(withProps({style:{...s,height:`${1/styles.length}em`,width:`${s.width}%`}}));
       });
-    })
-  ),
+    }),
+  )),
 );
-
 const MetricsBody = Div(
   withItems(
     PathHeader,
     RulesImpact,
     CostPerChange,
     UserImpact,
-    pipeIndex(repoNodes_by_repoid$)(
-      fa(has('code')),
-      sortBy('costPerChange'),
-      reverse,
-      slice(0,10),
-      mapv(({id})=>({data:id})),
-      // plog(`MetricsBody`),
-      mapvToArr(toItemProps(
-        GridCellPath,GridCellRulesImpact,GridCellCostPerChange,GridCellUserImpact
-      )),
-    ),
+    pipe(
+      props=>repoNodes_by_repoid$.map(get(props.data)),
+      dropRepeats,
+      map(pipe(
+        fa(has('code')),
+        sortBy('costPerChange'),
+        reverse,
+        slice(0,10),
+        mapv(({id})=>({data:id})),
+        mapvToArr(toItemProps(
+          GridCellPath,GridCellRulesImpact,GridCellCostPerChange,GridCellUserImpact
+        )),
+      ))
+    )
   ),
   g('minw400px w100% lAIC'),
   gi('mb.3 nthn-+4mb1','nthn4-3w19%_mr1% nthn4-2w44%_mr1% nthn4-1w19%_mr1% nthn4w14%_mr1%')
@@ -300,7 +307,8 @@ const Repo = Div(
   h('lAIStretch'),hi('nth1mr1 nth2mr1')
 );
 
-
+const setProp = str=>(...Components)=>pipe(({[str]:data})=>({data}),toItemProps(...Components));
+const mapIdsTo = compose(mapvToArr,setProp('id'));
 const RepoList = Div(
   withItems(repos$.map(mapIdsTo(RepoHeader,Repo))),
   v,vi('mb.5')
@@ -310,5 +318,6 @@ const AppLogo = Img(withProps({ src:logo, alt:'Cost Per Change Logo'}));
 const AppHeader = Header(withItems(AppLogo), h('lAIC lJCC bgF w100%'), hi('h80x') );
 
 //App
-const App = Div(withItems(AppHeader, TokenArea, RepoList,Modal), v, vi('mb1'));
+
+const App = Div(withItems(AppHeader, TokenArea, RepoList, getModalComponent()), v, vi('mb1'));
 export default App

@@ -31,7 +31,7 @@ export const analyse = (pathStr,codeStr)=>{
   try {
     code = babel.transform(codeStr, babelPresets).code;
     analysis = ana(code,{noCoreSize:true});
-    console.log(`analysis: "${pathStr}"\n`, analysis);
+    // console.log(`analysis: "${pathStr}"\n`, analysis);
   } catch(e){
     code || (code = codeStr);
     code = `File Not Analyzed.\nERROR escomplex-ing "${pathStr}".\n:${e.message}\n\n\n` + code;
