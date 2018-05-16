@@ -1,5 +1,5 @@
 /* eslint-disable no-unused-vars */
-import {Component,isValidElement,cloneElement,createElement,Children,createFactory,Fragment} from 'react';
+import {Component,isValidElement,cloneElement,createElement as Elem,Children,Fragment} from 'react';
 import PropTypes from 'prop-types';
 import {mapProps, withReducer, isClassComponent,withProps,withHandlers,mapPropsStream,componentFromStream} from 'recompose';
 // import {styleObjectToClasses,mergeStyles} from './styles.js';
@@ -9,11 +9,12 @@ import {
   get, transform,flatten,find,mapValues,flattenDeep,flatMap, compose,reduce,cond,pipeAsync,pick,
   omit,ensureArray,plog,isNumber,isFalsy,stubNull,len0,len1,first,over,set,condNoExec,not,mapv,
   argsToArray,arrayToArgs,acceptsArgsOrArray,curry,isArray,unset,toEmptyCopy,isObservable,
-  mapvToObjv,ensureFunction,constant,omitv,pipeAllArgsAsync,and,isProductionEnv,ifElse,has,
+  mapvToObjv,ensureFunction,constant,omitv,pipeAllArgsAsync,and,isProductionEnv,ifElse,has,every
 
 } from './utils';
 import {of$,from$,take,combine$,map,toArray,periodic$,flatMap as flatMap$,combineWith,
-  flattenSequentially,flattenConcurrently,buffer,never$,addDebugListener,debug
+  flattenSequentially,flattenConcurrently,buffer,never$,addDebugListener,debug,
+  flattenDeep as flattenDeep$
 } from './utils$.js';
 
 
@@ -40,7 +41,7 @@ import {of$,from$,take,combine$,map,toArray,periodic$,flatMap as flatMap$,combin
 let omitHOCHandlerFns = identity;
 if(!isProductionEnv()){
   const invalidPropFilter = omitv(and(isFunction,(v,k)=>k.startsWith('data-')));
-  omitHOCHandlerFns = str=>props=>createElement(str,invalidPropFilter(props));
+  omitHOCHandlerFns = str=>props=>Elem(str,invalidPropFilter(props));
 }
 
 export const toHOCComposer = (str)=>(...fns)=>compose(...fns,omitHOCHandlerFns)(str);
@@ -62,68 +63,49 @@ export const isComponent = c =>(isFunction(c)||isComponentString(c));
  /**
  * withItems Factory
  * creates a flatted array of React elements from anything
- * see the itemToElements for 'anything'
+ * see the xToElements for 'anything'
  * sets keys when needed
  */
 export const withItemsHOCFactory = (function() {
-  const isPropComponentCombo = and(has('Component'),has('props'));
   const hasKey = elem=>elem.key !== null;
   const cloneWithKey = (elem,key)=>cloneElement(elem,{key});
   const ensureKeys = ifElse(not(hasKey),cloneWithKey);
-  const unwrapWhenPossible = cond([
+  const unwrapSingles = cond([
     [len0,stubNull],
-    [len1,first],
+    [len1,pipe(first,ifElse(isArray,unwrapSingles,identity))],
     [stubTrue,mapv(ensureKeys)],
   ]);
-
-  const itemToElements = cond([
+  const xToElements = cond([
     [isUndefOrNull,stubNull],
     [isValidElement,identity],//(elem,props)=>cloneElement(elem,props)],
-    [isPropComponentCombo,(itm,props)=>createElement(itm.Component,{...props,...itm.props})],
-    [isClassComponent,(itm,props)=>createElement(itm,props)],
-    // passing child props as the first arg enables passing plain components
-    // passing parent props as the second arg enables fromParent function to get props in pipes
-    // recurse to enable pipes, but switch parentProps to child props on recursion to prevent accidental parent prop copying
-    [isObservable,(itm,props,parentProps)=>map(i=>{
-      return itemToElements(i,props);
-    })(itm)],
-    [isFunction,(itm,props,parentProps)=>itemToElements(itm(props,parentProps),props,props)],
-    [isString,(itm,props)=>createElement(Fragment,null,itm)],
-    [isNumber,(itm,props)=>createElement(Fragment,null,itm)],
-    [isArray,(arr,props)=>flatMap(itm=>itemToElements(itm,props,props))(arr)],
-    [stubTrue,(itm,props)=>console.log(`unknown:`,itm)||createElement('pre',props,`unknown item type passed - received: ${JSON.stringify(itm,null,2)}`)],
+    [isFunction,ifElse(isClassComponent,Elem,(x,prps)=>xToElements(x(prps),prps))],
+    [isObservable,identity],
+    [isString,(x,props)=>Elem(Fragment,null,x)],
+    [isNumber,(x,props)=>Elem(Fragment,null,x)],
+    [isArray,(arr,props)=>flatMap(x=>xToElements(x,props))(arr)],
+    [stubTrue,(x,props)=>console.log(`unknown:`,x)||Elem('pre',props,`unknown item type passed - received: ${JSON.stringify(x,null,2)}`)],
   ]);
+
   const ensureObservable = ifElse(isObservable,identity,of$);
-  const normalizeChildren = pipe(
-    flattenDeep,
-    omitv(isNull),
-    unwrapWhenPossible,
-  );
+  const normalizePipes = childrenProps=>mapv(pipe(
+    x=>xToElements(x,childrenProps),// unwrap functions, including any that return observables
+    ensureObservable,
+    flattenDeep$,
+    map(x=>xToElements(x,childrenProps))
+  ));
   return ({
     mapAllChildrenProps = ()=>({}),
-    pipeInputTransform = identity,
-  }={}) => argsToArray(ifElse(len0,identity, pipes=>BaseComponent=>props=>{
-    const childrenProps = mapAllChildrenProps(props||{});
-    let hasObs;
-    return pipe(
-      mapv(itm=>{
-        const elem = itemToElements(itm,childrenProps,props);
-        if(isObservable(elem)){hasObs=true;}
-        return elem;
-      }),
-      children=>hasObs===undefined
-        ? createElement(BaseComponent,props,normalizeChildren(children))
-        : createElement(
-            componentFromStream(pipe(
-              combineWith(...mapv(ensureObservable)(children)),
-              map(([p,...childrn])=>createElement(BaseComponent, p, normalizeChildren(childrn)))
-            )),
-            props
-          )
-    )(pipes);
-  }));
+  }={}) => (...pipes)=>pipes.length===0 ? identity : BaseComponent=>props=>pipe(
+    normalizePipes(mapAllChildrenProps(props||{})),
+    (arr)=>Elem(
+      componentFromStream(pipe(
+        combineWith(...arr),
+        map(([p,...children])=>Elem(BaseComponent, p, pipe(flattenDeep, omitv(isNull), unwrapSingles )(children)))
+      )),
+      props
+    )
+  )(pipes)
 }());
-
 
 
 // mergeableHocFactory cases
@@ -132,7 +114,7 @@ export const withItemsHOCFactory = (function() {
 // hoc(args)(args)(component)(props)
 export const mergeableHocFactory = ({onArgsPassed,onPropsPassed,_merged})=>(...args)=>(
   isComponent(args[0])
-    ? props=>createElement(args[0],onPropsPassed(_merged,props))
+    ? props=>Elem(args[0],onPropsPassed(_merged,props))
     : mergeableHocFactory({onArgsPassed,onPropsPassed,_merged:{...(_merged||{}),...onArgsPassed(...args)}})
 );
 
@@ -148,11 +130,10 @@ export const withItemsAllProps = withItemsHOCFactory({mapAllChildrenProps:identi
 export const handlerPipeHOCFactory = ({
   on='Click',
   pipeFn = pipeAllArgsAsync,
-  pipeInputTransform = identity,
   mergePropsWithEvent=(p,e)=>({...p, target:e.target}),
 }={})=>{
   return (...fnsArray)=>withHandlers({[`on${on}`]:p=>event=>{
-    const mergedProps = pipeInputTransform(mergePropsWithEvent(p,event));
+    const mergedProps = mergePropsWithEvent(p,event);
     pipeFn(...fnsArray)(mergedProps,mergedProps);
   }});
 }
@@ -218,8 +199,10 @@ export const polyGet = cond([
 ]);
 
 
-export const toItemProps = (...Components)=>(props)=>Components.map((C,i)=>({Component:C,props,key:(props.data||'')+i}))
-export const toPropFn = key=>(data,props)=>props[key](data);
+export const toItemPropsFactory = (dataKey='data')=>(...Components)=>(ownProps)=>Components.map((C,i)=>(props)=>(
+  Elem(C,{key:(ownProps[dataKey]||'')+i,...props,...ownProps})
+));
+export const toItemProps = toItemPropsFactory();
 
 
 /**

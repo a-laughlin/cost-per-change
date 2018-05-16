@@ -13,11 +13,11 @@ import {
   is,ifElse,cond,isArray,stubTrue,isFunction,ensureFunction,stubNull,tranToArr,and,converge, omitv, assignAll,
   fltrMapvToArr,pipeAllArgs,stubObject,isUndefined,not,stubFalse,round,memoize,sortBy,keyBy,
   isPlainObject,isString,kebabCase,pipeAsync,size,fltrvToArr,pipeAllArgsAsync,isNumber,ifError,logAndThrow,
-  pget,pgetv,isNull
+  pget,pgetv,isNull,reverse,slice
 } from './utils.js';
 
 import {
-  mapProps as rcMap,withProps,shouldUpdate as rcShouldUpdate,setObservableConfig,
+  mapProps as rcMap,withProps,setObservableConfig,
   componentFromStream,createEventHandler,mapPropsStream
 } from 'recompose';
 import {getModalComponent,getModalHOC} from './component-modal.js';
@@ -42,7 +42,9 @@ import {
 import {
   repos$,repos_devcost_by_id$,repos_changetime_by_id$, to_repo_devcost$, to_repo_changetime$,
   from_target_value,repoNodes_by_repoid$,mapProp,repoNodes$,repos_id$,repoNodeOutEdges$,
-  userToken$, to_userToken$,prop$,to_repo_copy,to_repo_remove,to_repo_url
+  userToken$, to_userToken$,to_repo_copy,to_repo_remove,to_repo_url,repoNodeOutEdges_by_repoid$,
+  pipeIndex,repoNodes_costPerChange$,repoNodes_userImpact$,repos_by_repoNode_id$,pipeCollection,
+  repoNodes_path$,mapCollectionKeys
 } from './dataflow.js';
 import {of$,map,setDebugListener,sampleCombine,combineWith,addDebugListener,combine$,fold,debug,debounce,startWith} from './utils$.js';
 
@@ -61,15 +63,11 @@ const withItems = withItemsHOCFactory({mapAllChildrenProps:pick(['data'])});
 // for consistency, the handler pipes (e.g., pipeClicks) pass props twice so from works
 const from = args=>(_,parentProps)=>polyGet(args)(mergeStateProps(parentProps))
 const mapFrom = selector=>rcMap(p=>({...from(selector)(p,p),...pick([statePropKey,statePublishKey])(p)}));
-const mapColl = collsFns=>(data,props)=>mapv((f,ckey)=>f(props)(from(ckey)(data,props)))(collsFns);
-const shouldUpdate = fn=>rcShouldUpdate((p,n)=>fn({...p,...p[statePropKey]},{...n,...n[statePropKey]}));
 // const mapIdsToItemProps = (...Components)=>mapvToArr(pipe(polyGet(['id']),({id})=>({id,data:id}),toItemProps(...Components)));
-const toDataProp = x=>({data:x});
-const passIdTo = (...Components)=>pipe(from({data:'id',id:'id'}),toItemProps(...Components));
-
-
+const setProp = str=>(...Components)=>pipe(({[str]:data})=>({data}),toItemProps(...Components));
+const mapIdsTo = compose(mapvToArr,setProp('id'));
 // Reds Scale Generator
-const reds = schemeReds[8].slice(0,5);
+const reds = slice(0,5)(schemeReds[8]);
 const getRedGenerator = (min,max)=>d3.scaleQuantize().domain([min, max]).range(reds);
 const scaleRed = getRedGenerator(0,4);
 // const continuousReds = d3.scaleSequential(interpolateReds);
@@ -92,7 +90,7 @@ const QMark = Span(withItems('?'),
 
 // User / Info Section
 const TokenTextInput = TextInput(
-  mapProp({defaultValue:userToken$}),
+  mapProp({defaultValue:'userTokens.0.value'}),
   pipeChanges(pget({value:'target.value',data:'data'}),to_userToken$),
   h('w40 b0 bb1x bcD')
 );
@@ -106,7 +104,7 @@ const TokenHelp = Span(withItems(QMark),withModal(TokenHelpMsg));
 const ruleLink = 'https://github.com/escomplex/escomplex/blob/master/METRICS.md';
 const AboutModal = P(withItems(ABOUT_HELP), v('w100% wsPL peN'));
 const About = Span(withItems('About'),withModal(AboutModal));
-const TokenArea = Div(shouldUpdate(stubFalse),
+const TokenArea = Div(
   withItems(Label(withItems('GitHub Token')),TokenHelp,TokenTextContainer,About),
   h('w100%'),hi('nth3mrAuto first:ml.5 last:mr.5'),
 );
@@ -116,7 +114,7 @@ const TokenArea = Div(shouldUpdate(stubFalse),
 
 // Repo Header
 const RepoUrlInput = TextInput(
-  mapProp({defaultValue:'repos[prop].url',data:(d)=>of$(d)}),// shouldn't need to specify data prop
+  mapProp({defaultValue:'repos[prop].url'}),// shouldn't need to specify data prop
   pipeChanges( pget({value:'target.value',data:'data'}),to_repo_url),
   h('t1em w100% b0 bb1x')
 );
@@ -144,35 +142,23 @@ const RepoHeader = Div(
 
 
 // Repo File Tree
-const TreeComponent = (props)=>{
-  const {node,parentNode,id,getPath,getColor,[statePublishKey]:pub} = props;
-  // lots of hackiness here to pass the state publish key prop
-  // calculating things like node color is much cleaner with streams. - no coupling functions multiple levels deep
-  // really dislike passing props through.  Ugly dependency graphs.
-  // NOTE TO SELF - don't try passing props to the modal component.  Already spent hours trying to
-  // debug that.  Just fix when updating with streams - subscribe the modal to circle clicks.
-  const Circ = Circle(
-    mapFrom(({getColor,style={}})=>({r:4,style:{...style,fill:getColor(node),stroke:'#ccc',strokeWidth:'1px'}})),
-    withModal(Pre(withItems(`file click functionality not implemented yet`))),
-  );
-  return (
+const Circ = Circle(withModal(Pre(withItems(`file click functionality not implemented yet`))));
+const TreeComponent = ({node,parentNode,id,getPath,getColor})=>(
   <g key={id}>
-    <path
-      d={getPath(parentNode,node)}
-      style={{ fill: 'none', stroke: '#ccc', strokeWidth:'1px' }}>
-    </path>
+    <path d={getPath(parentNode,node)} style={{fill:'none',stroke:'#ccc',strokeWidth:'1px'}}></path>
     {ensureArray(node.children).map((c,i)=>(
-      <TreeComponent {...props} parentNode={node} node={c} id={`${id}.${i}`} key={`${id}.${i}`} />
+      <TreeComponent getPath={getPath} getColor={getColor} parentNode={node} node={c} id={`${id}.${i}`} key={`${id}.${i}`} />
     ))}
     <g transform={`translate(${node.y},${node.x})`}>
-      <Circ {...props} id={node.data.id} />
+      <Circ r={4} style={{fill:getColor(node),stroke:'#ccc',strokeWidth:'1px'}} />
       <text dy={'0.35em'} x={-6} textAnchor={'end'} style={{pointerEvents:'none',userSelect:'none',font:'8px sans-serif'}}>{node.data.name}</text>
     </g>
   </g>
-)}
+);
+
 const TreeSVG = Svg(
-  withItems(prop$(repoNodeOutEdges$,repoNodes$, repos$)(map(([id,repoNodeOutEdges,repoNodes, repos])=>{
-    repoNodes = fltrv(matches({repoid:id}))(repoNodes);
+  withItems(pipeIndex(repoNodeOutEdges_by_repoid$,repoNodes_by_repoid$, repos$)(
+    (repoNodeOutEdges,repoNodes, repo)=>{
     const rootNodes = {...repoNodes};
     const adjList = mapv((outEdgeObj,nodeKey)=>outEdgeObj.edges.map((edgeKey)=>{
       delete rootNodes[edgeKey];
@@ -191,12 +177,12 @@ const TreeSVG = Svg(
     const getPath = (parent,node)=>pathGen({source:[node.y,node.x],target:[parent.y,parent.x]});
     const getColor = pipe(
       get('data.costPerChange'),
-      ifElse(isUndefined,()=>'#fff',getRedGenerator(repos[id].costPerChangeMin,repos[id].costPerChangeMax))
+      ifElse(isUndefined,()=>'#fff',getRedGenerator(repo.costPerChangeMin,repo.costPerChangeMax))
     );
     return toItemProps(TreeComponent)(
-      {node:treeLayout,parentNode:treeLayout,id,getPath,getColor}
+      {node:treeLayout,parentNode:treeLayout,id:repo.id,getPath,getColor}
     );
-  }))),
+  })),
   h('minw300px minh300px')
 );
 
@@ -215,8 +201,9 @@ const MaintainabilityRuleHelpTrigger = Span(withItems(QMark),withModal(Maintaina
 const MaintainabilityRule = Span(withItems('Maintainability',MaintainabilityRuleHelpTrigger),h,hi);
 const Rules = Div(
   withItems('Rules',MaintainabilityRule,EffortRule,CyclomaticRule),
-  v,vi('t0.8 mt0.5',
-  `nth1bgc${reds[4]} nth2bgc${reds[3]} nth3bgc${reds[2]} nth4bgc${reds[1]} nth5bgc${reds[0]}`)
+  v,
+  vi('t0.8 mt0.5',`nth1bgc${reds[4]} nth2bgc${reds[3]}`,
+    `nth3bgc${reds[2]} nth4bgc${reds[1]} nth5bgc${reds[0]}`)
 );
 
 
@@ -235,76 +222,49 @@ const UserImpact = Span(withItems('User Impact',UserImpactHelpTrigger),h);
 const PathHeader = Span(withItems('Path'));
 
 // Metrics Grid Cells
-const GridCellRoundNum = Span(withItems(pipe(from('data'),round)));
-const GridCellPath = Span(withItems(pipe(from('repoNodes[id].path'),v=>v.replace(/^.+\//g,''))));
-
-
-
-const RulesImpactCell = Div(
-  withItems(prop$(repoNodes$,repos$)(map(([prop,repoNodes,repos])=>{
-    const nodeId = prop;
-    console.log(`nodeId`, nodeId);
-    console.log(`repoNodes[nodeId]`, repoNodes[nodeId]);
-    const node = repoNodes[nodeId];
-    const repo = repos[node.repoid];
-    const styles = /*sortBy('width')*/([// should generate these based on selected rules, but select/deselect nodes isn't implemented yet
-      {backgroundColor:reds[4],width:(node.maintainability/repo.maintainabilityMax)*100},
-      {backgroundColor:reds[3],width:(node.effort/repo.effortMax)*100},
-      {backgroundColor:reds[2],width:(node.cyclomatic/repo.cyclomaticMax)*100},
-      // {backgroundColor:reds[1],width:(node.params/repo.paramsMax)*100},
-      // {backgroundColor:reds[0],width:(node.loc/repo.locMax)*100},
-    ]);
-    return styles.map((s,i,c)=>{
-      const lastWidth = i===0 ? 0: c[i-1].width;
-      return Div(withProps({style:{...s,height:`${1/styles.length}em`,width:`${s.width}%`}}));
-    });
-  })))
+const GridCellCostPerChange = Span(withItems(pipeIndex(repoNodes_costPerChange$)(round)));
+const GridCellUserImpact = Span(withItems(pipeIndex(repoNodes_userImpact$)(round)));
+const GridCellPath = Span(withItems(pipeIndex(repoNodes_path$)(v=>v.replace(/^.+\//g,''))));
+const GridCellRulesImpact = Div(
+  withItems(
+    // pipe(plog('GridCellRulesImpact'),stubNull),
+    pipeIndex(repos_by_repoNode_id$,repoNodes$)((repo,node)=>{
+      const styles = ([// should generate these based on selected rules, but select/deselect nodes isn't implemented yet
+        {backgroundColor:reds[4],width:(node.maintainability/repo.maintainabilityMax)*100},
+        {backgroundColor:reds[3],width:(node.effort/repo.effortMax)*100},
+        {backgroundColor:reds[2],width:(node.cyclomatic/repo.cyclomaticMax)*100},
+        // {backgroundColor:reds[1],width:(node.params/repo.paramsMax)*100},
+        // {backgroundColor:reds[0],width:(node.loc/repo.locMax)*100},
+      ]);
+      return styles.map((s,i,c)=>{
+        const lastWidth = i===0 ? 0: c[i-1].width;
+        return Div(withProps({style:{...s,height:`${1/styles.length}em`,width:`${s.width}%`}}));
+      });
+    })
+  ),
 );
 
-// problem to solve - mapping data prop to coll id
-// export const repoNodes_exclude_repoid$ = repoNodes_by_repoid$.map(fltrv()groupByKey('repoid'));
-
-// two cases - pass an id (happens by default)
-// pass collection ids pipe(repoNodes_by_repoid(repoNodes).map(outEdgesByRepoNodeId).map(edgeId).toComponents()
-// switch ids take a join collection, pass that id map the current id two cases - pass an id (happens by default)
-// const from$ = (...streamMappers)=>fn=>props=>{
-//   const streams$ = streamMappers.map(s=>isFunction(s)?s(props):s)
-//   return xs.combine(...streams$).map(arr=>fn(...arr));
-// };
-// ({data}:id)=>coll$.map(get(id)), should be a common enough pattern to abstract - need to see if it arises in multiple cases
-// withItems(from$(
-//   ({data}:id)=>repoNodes$.map(get(id)),
-//   ({data}:id)=>repoNodes_by_repoid$.map(get(id))
-// })(repo,nodes);
-// withItems(converge$(
-//   flatMap(prop=>repoNodes_repoid$.map(get(prop))
-//   pipe(constant(repoNodes$),map(get()flatMap(prop=>repoNodes_repoid$.map(get(prop))
-// ))converge()switchIdFromJoin$(from$())
 const MetricsBody = Div(
   withItems(
     PathHeader,
     RulesImpact,
     CostPerChange,
     UserImpact,
-    pipe(
-      from(({data,repoNodes})=>fltrvToArr(and(matches({repoid:data}),has('code')))(repoNodes)),
+    pipeIndex(repoNodes_by_repoid$)(
+      fltrvToArr(has('code')),
       sortBy('costPerChange'),
-      a=>a.reverse(),
-      a=>a.slice(0,10),
-      mapv(converge([
-        pipe((node)=>({id:node.id,data:node.id}),toItemProps(GridCellPath)),
-        pipe((node)=>console.log('node',node)||({id:node.id,data:node.id,foo:'bar'}),toItemProps(RulesImpactCell)),
-        pipe(({costPerChange})=>({data:costPerChange}),toItemProps(GridCellRoundNum)),
-        pipe(({userImpact})=>({data:userImpact}),toItemProps(GridCellRoundNum)),
-      ]))
-    )
+      reverse,
+      slice(0,10),
+      mapv(({id})=>({data:id})),
+      // plog(`MetricsBody`),
+      mapvToArr(toItemProps(
+        GridCellPath,GridCellRulesImpact,GridCellCostPerChange,GridCellUserImpact
+      )),
+    ),
   ),
   g('minw400px w100% lAIC'),
   gi('mb.3 nthn-+4mb1','nthn4-3w19%_mr1% nthn4-2w44%_mr1% nthn4-1w19%_mr1% nthn4w14%_mr1%')
 );
-
-
-
 
 // Dev Cost and Time Per Change Adjustments
 const TimePerChangeText = Span(withItems(TIME_PER_CHANGE_HELP),v('wsPL'));
@@ -336,14 +296,13 @@ const FileMetrics = Div(
 );
 
 const Repo = Div(
-  withItems(toItemProps(TreeSVG,Rules/*,FileMetrics*/)),
+  withItems(TreeSVG,Rules,FileMetrics),
   h('lAIStretch'),hi('nth1mr1 nth2mr1')
 );
 
+
 const RepoList = Div(
-  withItems(prop$(repos$)(map(([p,repos])=>{
-    return mapvToArr(pipe(pget({data:'id'}),toItemProps(RepoHeader,Repo)))(repos)
-  }))),
+  withItems(repos$.map(mapIdsTo(RepoHeader,Repo))),
   v,vi('mb.5')
 );
 // Header

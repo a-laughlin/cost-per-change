@@ -1,5 +1,5 @@
 import * as xsfp from './xstream-fp.js';
-import {pipe} from './utils.js'
+import {pipe,isObservable} from './utils.js';
 import {setObservableConfig} from 'recompose';
 import xstreamConfig from 'recompose/xstreamObservableConfig';
 setObservableConfig(xstreamConfig);
@@ -61,6 +61,9 @@ flatMapLatest,
 toArray
 } = xsfp;
 
+export const flattenDeep = flatMap(x=>{
+  return isObservable(x)?flattenDeep(x):of$(x);
+});
 export const filterChangedItems = (prop='')=>changedColl$=>pipe(
   fold((lastObj={},nextObj={})=>{
     let changedItems = {};

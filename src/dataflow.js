@@ -4,7 +4,7 @@ import {setObservableConfig,createEventHandler,mapPropsStream,componentFromStrea
 import {
   pipe,compose,mapv,plog,get,identity,pget,pgetv,ensureArray,set,isObservable,assignAll,
   mapvToArr,isFunction,ensureFunction,groupByKey,ifElse,isString,cond,stubTrue,transformToObj,
-  omitv,matches,fltrvToObj,isPlainObject,isNumber
+  omitv,matches,fltrvToObj,isPlainObject,isNumber,tranToObj
 } from './utils';
 import {of$,from$,combine$,map,debug,debounce,from,combineWith,flatten,flattenConcurrently,flattenSequentially,addListener,
   addDebugListener,setDebugListener,dropRepeats,flatMapLatest,flatMap,sampleCombine,getDebugListener,
@@ -22,30 +22,35 @@ export const simpleStore = (initialState={})=>{
 
 
 const tplRegex = /\[prop\]\.|\.?prop\./g;
-const tpl = s=>prop=>s.replace(tplRegex,`[${prop}].`);
+const tpl = string=>prop=>string.replace(tplRegex,`[${prop}].`);
+const ensureObservable = ifElse(isObservable,identity,of$);
 const ensureStreamGetter = cond([
-  [isFunction,x=>prop=>x(prop)],
-  [isObservable,x=>prop=>prop?map(get(prop))(x):x],
-  [isString,x=>prop=>map(get(tpl(x)(prop)))(store$)],
+  [isFunction,fn=>prop=>ensureObservable(fn(prop))],
+  [isObservable,s$=>prop=>s$.map(get(prop))],
+  [isString,string=>prop=>map(get(tpl(string)(prop)))(store$)],// can cache these
   [stubTrue,x=>prop=>of$(x)],
 ]);
-const props$ = obj=>{
-  const keys = Object.keys(obj);
-  const getterFns = Object.values(obj).map(ensureStreamGetter);
-  return pipe(
-    flatMap((data)=>combine$(...getterFns.map(fn=>fn(data)))),
+const mapPropFactory = (dataKey='data')=>obj=>{
+  const keys=[dataKey];
+  const getters=[prop=>of$(prop)];
+  for(let k in obj){
+    keys[keys.length] = k;
+    getters[getters.length] = ensureStreamGetter(obj[k]);
+  };
+  return mapPropsStream(pipe(
+    flatMap(props=>combine$(...getters.map(fn=>fn(props[dataKey])))),
     map(latestVals=>latestVals.reduce((acc,v,i)=>{acc[keys[i]]=v;return acc;},{})),
-  );
+  ));
 }
-export const mapPropHocFactory = (dataKey='data')=>obj=>mapPropsStream(pipe(
-  map(get(dataKey)),
-  props$(obj),
-  debounce(10),
-));
+export const mapProp = mapPropFactory();
 
-export const mapProp = mapPropHocFactory();
-export const prop$ = (...streams)=>(...fns)=>(props)=>{
+export const pipeProp$ = (...streams)=>(...fns)=>(props)=>{
   return pipe(...fns)(combine$(of$(props.data),...streams));
+};
+export const pipeIndex = (...streams$)=>(...fns)=>props=>{
+  return combine$(of$(props.data),...streams$).map(
+    ([prop,...streams])=>pipe(...fns)(...streams.map(s=>s[prop]))
+  );
 };
 export const from_target_value = pget({value:'target.value',data:'data'});
 
@@ -131,19 +136,37 @@ export const to_repo_url$ = setStateX('repos.prop.url');
 
 // files/directory nodes
 export const [repoNodes$,to_repoNodes$] = [map(get('repoNodes'))(store$),setStateX('repoNodes')];
-export const repoNodes_repoid$ = map(mapv('repoid'))(repoNodes$);
-
-// differently indexed
-export const repoNodes_by_repoid$ = map(groupByKey('repoid'))(repoNodes$);
-
+export const repoNodes_costPerChange$ = map(mapv('costPerChange'))(repoNodes$);
+export const repoNodes_userImpact$ = map(mapv('userImpact'))(repoNodes$);
+export const repoNodes_path$ = map(mapv('path'))(repoNodes$);
 
 // file/directory edges
 export const repoNodeOutEdges$ = map(get('repoNodeOutEdges'))(store$);
-export const repoNodeOutEdges_by_repoid$ = map(groupByKey('repoid'))(repoNodeOutEdges$);
 
 // user github token
 export const userToken$ = map(get('userTokens.0.value'))(store$);
 export const to_userToken$ = setStateX('userTokens.0.value');
+
+
+
+
+// joins
+export const repos_by_repoNode_id$ = store$
+// why didn't it work to use combine$ or combineWith?  Why directly from the store$?
+.map(({repoNodes,repos})=>mapv(n=>repos[n.repoid])(repoNodes));
+
+export const repoNodes_by_repoid$ = map(tranToObj((acc,n,nid)=>{
+  const {repoid,id} = n
+  acc[repoid] || (acc[repoid] = {});
+  acc[repoid][id]=n;
+}))(repoNodes$);
+
+export const repoNodeOutEdges_by_repoid$ = map(tranToObj((acc,edge)=>{
+  const {repoid,id} = edge;
+  acc[repoid] || (acc[repoid] = {});
+  acc[repoid][id]=edge;
+}))(repoNodeOutEdges$);
+
 
 
 

@@ -7,7 +7,7 @@ import {
   isInteger,isError,isNumber,isObjectLike,hasIn,has,isWeakMap, isWeakSet, isMap, isSet,isEmpty,
   isString, isPlainObject, isFunction, isNull,isUndefined,set,unset,curry,mergeAllWith as mergeAllWithFP,mergeAll as mergeAllFP,
   omitBy,rearg,rangeStep,assignAll as assignAllFP,assignAllWith as assignAllWithFP,ary as arity,
-  unary,sortBy,keyBy,kebabCase,size,partition
+  unary,sortBy,keyBy,kebabCase,size,partition,every
 } from 'lodash/fp';
 import {merge,mergeWith,set as _set,debounce as _debounce,memoize as _memoize} from 'lodash';
 import $$observable from 'symbol-observable';
@@ -21,7 +21,7 @@ export {
   findKey,uniqueId,findIndex,set,mergeWith,reject,concat,constant,flatMap,flattenDeep,omit,
   isInteger,isError,isNumber,isObjectLike,hasIn,has,isWeakMap, isWeakSet, isMap, isSet,isEmpty,
   isString, isPlainObject, isFunction, isNull,isUndefined,_set,unset,pickBy,curry,omitBy,sortBy,
-  rearg,rangeStep,over,kebabCase,size,partition
+  rearg,rangeStep,over,kebabCase,size,partition,every
 }
 
 
@@ -187,6 +187,7 @@ const pipeAsyncFactory = (catchFn)=>(firstFn,...fns)=>(firstInput,...args)=>{ //
 //  enables aborting
 //  Works with lodash/fp out of the box
 //
+export const slice = (...sliceArgs)=>arr=>arr.slice(...sliceArgs);
 export const reverse = arr=>arr.slice(0).reverse(); // immutable array reverse
 export const pipe = (fn1=identity,...fns)=>(arg1,...args)=>fns.reduce((a,f)=>f(a),fn1(arg1,...args));
 export const pipeAsync = (fn1=identity,...fns)=>pipeAllArgsAsync(fn1,...fns.map(arity1));
@@ -248,7 +249,7 @@ export const toObj = (fn,predicate=stubTrue)=>coll=>transform(ifElse(predicate,f
 // collection functions that always output to Obj
 export const mapvToObjv = fn=>coll=>transform((a,val,key,c)=>a[key]=fn(val,key,c),{})(coll);// equivalent to _.mapValues, but works on arrays
 // collection functions that always output to Array
-export const mapvToArr = map
+export const mapvToArr = map;
 export const mapkToArr = pipe(rearg([1,0,2]),map);
 export const fltrvToArr = filter;
 // collection functions that retain the collection type
