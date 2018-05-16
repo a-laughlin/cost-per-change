@@ -1,53 +1,35 @@
 /* eslint-disable no-unused-vars */
 import React from 'react';
-// import logo from './logo.svg';
-import logo from './cost-per-change.png';
-import './App.css';
-import {composeWalker,extension,demoData} from './composeWalker'
-import {
-  pipe,compose,assignPropsToArrays,pick,plog,omit,filter,spread,ensureArray,
-  identity,uniqueId,
-  has,hasIn,concat,concatRight,concatBefore,appendToCopy,concatAfter,keyIs,sort,get,constant,
-  without,forkJoin,each,forOwn,pickBy,transform,omitBy,matches,transformToObj,mapv,mapk,tran,cycle,
-  fltrv, fltrk,mapkToObjk, mapvToObjk, mapvToObjv, mapvToArr, mapkToArr,values,condNoExec as condnx,
-  is,ifElse,cond,isArray,stubTrue,isFunction,ensureFunction,stubNull,tranToArr,and,converge, omitv, assignAll,
-  fltrMapvToArr,pipeAllArgs,stubObject,isUndefined,not,stubFalse,round,memoize,sortBy,keyBy,
-  isPlainObject,isString,kebabCase,pipeAsync,size,fa,pipeAllArgsAsync,isNumber,ifError,logAndThrow,
-  pget,pgetv,isNull,reverse,slice
-} from './utils.js';
-
-import {
-  mapProps as rcMap,withProps,setObservableConfig,
-  componentFromStream,createEventHandler,mapPropsStream
-} from 'recompose';
-import {getModalComponent,getModalHOC} from './component-modal.js';
-import {initialState} from './initial-state';
 import * as d3 from 'd3';
+import {withProps} from 'recompose';
 import {schemeReds,scaleOrdinal,interpolateReds} from 'd3-scale-chromatic';
 
-import {
-  G,Path,Circle,Text,Div,Span,Img,H1,Ul,Li,Input,A,Label,Svg,TextInput,Button,Textarea,Header,Pre,P,
-  withItemsHOCFactory,handlerPipeHOCFactory,toItemProps,
-  pipeClicks,pipeChanges,pipeMouseEnter,pipeMouseLeave,polyGet,
-  withGlobalState, mergeStateProps, mergeState, clearState, toState, unsetState,assignToState,
-  toStateWith, statePropKey, statePublishKey,hoCond,toPropFn
-} from './hoc-utils.js';
+import logo from './cost-per-change.png';
+import './App.css';
+import {pipe,compose,plog,ensureArray, mx, ma, get, ifElse,cond,stubNull,isUndefined,round,sortBy,
+  fa, pget,reverse,slice
+} from './utils.js';
+import {of$,map,combineWith,combine$,fold,debug,debounce,dropRepeats} from './utils$.js';
+import {getModalComponent,getModalHOC} from './component-modal.js';
+// plus a few shorthands for vertical, horizontal, and grid style flexbox HOCs
+import {v,h,g,vi,hi,gi} from './styles.js';
 
-// plus a few shorthands for lists vertical, horizontal, and grid HOCs
-import {v,h,g,vi,hi,gi,withStyles} from './styles.js';
-import {
-  ABOUT_HELP,REPO_URL_HELP,TIME_PER_CHANGE_HELP,CYCLOMATIC_HELP, MAINTAINABILITY_HELP,EFFORT_HELP
-} from './help-messages.js';
-
-import {
-  repos$,repos_devcost_by_id$,repos_changetime_by_id$, to_repo_devcost$, to_repo_changetime$,
+import {repos$,repos_devcost_by_id$,repos_changetime_by_id$, to_repo_devcost$, to_repo_changetime$,
   from_target_value,repoNodes_by_repoid$,mapProp,repoNodes$,repos_id$,repoNodeOutEdges$,
   userToken$, to_userToken$,to_repo_copy,to_repo_remove,to_repo_url,repoNodeOutEdges_by_repoid$,
   repoNodes_costPerChange$,repoNodes_userImpact$,repos_by_repoNode_id$,pipeCollection,
   repoNodes_path$,nodeAnalyses$,nodeAnalyses_by_repoid$
 } from './dataflow.js';
-import {of$,map,setDebugListener,sampleCombine,combineWith,addDebugListener,combine$,fold,debug,
-  debounce,dropRepeats} from './utils$.js';
+
+import {Circle,Text,Div,Span,Img,H1,Input,A,Label,Svg,TextInput,Button,Header,Pre,P,toItemProps,
+  withItemsHOCFactory, pipeClicks,pipeChanges
+} from './hoc-utils.js';
+
+// data imports
+import {ABOUT_HELP,REPO_URL_HELP,TIME_PER_CHANGE_HELP,CYCLOMATIC_HELP,MAINTAINABILITY_HELP,
+  EFFORT_HELP
+} from './help-messages.js';
+
 
 // TODO: Repo loading spinner.
 // TODO: Token field flash red if try to load a repo without a token.
@@ -59,7 +41,7 @@ import {of$,map,setDebugListener,sampleCombine,combineWith,addDebugListener,comb
 // https://css-tricks.com/considerations-styling-modal/
 // HOCs
 const withModal = getModalHOC();
-const withItems = withItemsHOCFactory({mapAllChildrenProps:pick(['data'])});
+const withItems = withItemsHOCFactory({mapAllChildrenProps:pget(['data'])});
 
 
 // Reds Scale Generator
@@ -151,10 +133,10 @@ const TreeComponent = ({node,parentNode,id,getPath,getColor})=>(
 
 const TreeSVG = Svg(
   withItems(pipe(
-    ({data:repoid})=>combine$(repoNodeOutEdges_by_repoid$,repoNodes_by_repoid$, nodeAnalyses_by_repoid$).map(mapv(get(repoid))),
+    ({data:repoid})=>combine$(repoNodeOutEdges_by_repoid$,repoNodes_by_repoid$, nodeAnalyses_by_repoid$).map(mx(get(repoid))),
     map(([repoNodeOutEdges,repoNodes, analyses])=>{
       const rootNodes = {...repoNodes};
-      const adjList = mapv((outEdgeObj,nodeKey)=>outEdgeObj.edges.map((edgeKey)=>{
+      const adjList = mx((outEdgeObj,nodeKey)=>outEdgeObj.edges.map((edgeKey)=>{
         delete rootNodes[edgeKey];
         return repoNodes[edgeKey];
       }))(repoNodeOutEdges);
@@ -255,16 +237,15 @@ const MetricsBody = Div(
     CostPerChange,
     UserImpact,
     pipe(
-      props=>repoNodes_by_repoid$.map(get(props.data)),
+      ({data:repoid})=>nodeAnalyses_by_repoid$.map(get(repoid)),
       dropRepeats,
       map(pipe(
-        fa(has('code')),
         sortBy('costPerChange'),
         reverse,
         slice(0,10),
-        mapv(({id})=>({data:id})),
-        mapvToArr(toItemProps(
-          GridCellPath,GridCellRulesImpact,GridCellCostPerChange,GridCellUserImpact
+        mx(pipe(
+          ({id})=>({data:id}),
+          toItemProps(GridCellPath,GridCellRulesImpact,GridCellCostPerChange,GridCellUserImpact)
         )),
       ))
     )
@@ -297,10 +278,7 @@ const MetricsParams = Div(withItems(
   DevCostPerHourLabel, DevCostPerHourHelp, DevCostPerHour,
 ),h('mtAuto'),hi('ml.5'));
 
-const FileMetrics = Div(
-  withItems(MetricsBody,MetricsParams,pipe(plog('fileMetrics'),stubNull)),
-  v,vi('mb.5')
-);
+const FileMetrics = Div( withItems(MetricsBody,MetricsParams), v,vi('mb.5'));
 
 const Repo = Div(
   withItems(TreeSVG,Rules,FileMetrics),
@@ -308,7 +286,7 @@ const Repo = Div(
 );
 
 const setProp = str=>(...Components)=>pipe(({[str]:data})=>({data}),toItemProps(...Components));
-const mapIdsTo = compose(mapvToArr,setProp('id'));
+const mapIdsTo = compose(ma,setProp('id'));
 const RepoList = Div(
   withItems(repos$.map(mapIdsTo(RepoHeader,Repo))),
   v,vi('mb.5')
