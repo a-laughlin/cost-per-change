@@ -43,7 +43,6 @@ export const tween$ = etween;
 // except for the fact that it has a child Stream attached as Listener. Documentation doesn't say
 // which is which
 // methods - mutate the existing stream
-// for piping consistency, returning the same stream via , operator
 export const getListener = ({
   next=x=>x,
   error=x=>{throw Error(x);},

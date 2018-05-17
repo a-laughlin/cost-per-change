@@ -9,10 +9,10 @@ import './App.css';
 import {pipe,compose,plog,ensureArray, mx, ma, get, ifElse,cond,stubNull,isUndefined,round,sortBy,
   fa, pget,reverse,slice
 } from './utils.js';
-import {of$,map,combineWith,combine$,fold,debug,debounce,dropRepeats} from './utils$.js';
+import {of$,combine$,map,debug,debounce,dropRepeats} from './utils$.js';
 import {getModalComponent,getModalHOC} from './component-modal.js';
 // plus a few shorthands for vertical, horizontal, and grid style flexbox HOCs
-import {v,h,g,vi,hi,gi} from './styles.js';
+import {v,h,g,vi,hi,gi,withStyles} from './styles.js';
 
 import {repos$,repos_devcost_by_id$,repos_changetime_by_id$, to_repo_devcost$, to_repo_changetime$,
   from_target_value,repoNodes_by_repoid$,mapProp,repoNodes$,repos_id$,repoNodeOutEdges$,
@@ -37,12 +37,13 @@ import {ABOUT_HELP,REPO_URL_HELP,TIME_PER_CHANGE_HELP,CYCLOMATIC_HELP,MAINTAINAB
 // TODO: Stacked bar chart in table - current vs. optimal
 // TODO: Repo metrics - maybe as background behind stacked bar.
 
-// great modal styling article
-// https://css-tricks.com/considerations-styling-modal/
 // HOCs
 const withModal = getModalHOC();
 const withItems = withItemsHOCFactory({mapAllChildrenProps:pget(['data'])});
 
+// utils
+const setProp = str=>(...Components)=>pipe(({[str]:data})=>({data}),toItemProps(...Components));
+const mapIdsTo = compose(ma,setProp('id'));
 
 // Reds Scale Generator
 const reds = slice(0,5)(schemeReds[8]);
@@ -56,7 +57,7 @@ const scaleRed = getRedGenerator(0,4);
 
 // Random Util Element
 const QMark = Span(withItems('?'),
-  h('lAIC lACC crP peN dIF usN','tvaM t.4 lh1.3 tcC',
+  h('crP peN usN','tvaM t.4 lh1.3 tcC',
   'p0 pl.3 pr.3','b1x bSolid brad50% bcC','ml.5 mr.5'),
 );
 
@@ -69,18 +70,17 @@ const TokenTextInput = TextInput(
   pipeChanges(pget({value:'target.value',data:'data'}),to_userToken$),
   h('w40 b0 bb1x bcD')
 );
-const TokenTextContainer = Div(withItems(TokenTextInput),h('lGrow1'));
-const TokenHelpLink = A(
-  withProps({target:'blank',href:'https://github.com/settings/tokens'}),
-  withItems('github.com/settings/tokens')
-);
-const TokenHelpMsg = Span(withItems('Get Token at: ',TokenHelpLink,` (sorry that clicking links in the modal doesn't work yet)`));
-const TokenHelp = Span(withItems(QMark),withModal(TokenHelpMsg));
+const ghURL = `github.com/settings/tokens`;
 const ruleLink = 'https://github.com/escomplex/escomplex/blob/master/METRICS.md';
+const TokenHelpLink = A(withProps({target:'blank',href:`https://${ghURL}`}), withItems(ghURL));
+const TokenTextContainer = Div(withItems(TokenTextInput),h('lGrow1'));
+const TokenHelpMsg = Span(withItems('Get Token at: ',TokenHelpLink));
+const TokenHelp = Span(withItems(QMark),withModal(TokenHelpMsg));
+const TokenLabel = Label(withItems('GitHub Token'));
 const AboutModal = P(withItems(ABOUT_HELP), v('w100% wsPL peN'));
 const About = Span(withItems('About'),withModal(AboutModal));
 const TokenArea = Div(
-  withItems(Label(withItems('GitHub Token')),TokenHelp,TokenTextContainer,About),
+  withItems(TokenLabel,TokenHelp,TokenTextContainer,About),
   h('w100%'),hi('nth3mrAuto first:ml.5 last:mr.5'),
 );
 
@@ -93,24 +93,15 @@ const RepoUrlInput = TextInput(
   pipeChanges( pget({value:'target.value',data:'data'}),to_repo_url),
   h('t1em w100% b0 bb1x')
 );
+const RepoUrlContainer = Div(withItems(RepoUrlInput),h('lGrow1'));
 const RepoUrlHelpText = Span(withItems(REPO_URL_HELP),v('wsPL'));
 const RepoUrlHelpTrigger = Span(withItems(QMark),withModal(RepoUrlHelpText));
-const RepoUrlContainer = Div(withItems(RepoUrlInput),h('lGrow1'));
-const RemRepoButton = Button(withItems('Remove'),
-  pipeClicks(get('data'),to_repo_remove)
-);
-const CopyRepoButton = Button(withItems('Copy'),
-  pipeClicks(get('data'),to_repo_copy)
-);
+const RepoUrlLabel = Label(withItems('GitHub Path'));
+const RemRepoButton = Button(withItems('Remove'), pipeClicks(get('data'),to_repo_remove) );
+const CopyRepoButton = Button(withItems('Copy'), pipeClicks(get('data'),to_repo_copy));
 const RepoHeader = Div(
-  withItems(
-    Label(withItems('GitHub Path')),
-    RepoUrlHelpTrigger,
-    RepoUrlContainer,
-    RemRepoButton,
-    CopyRepoButton
-  ),
-  h('w100% b0 bt1x bSolid bcD brad10x'),hi('ml.5 mr.5 mt.5')
+  withItems( RepoUrlLabel, RepoUrlHelpTrigger, RepoUrlContainer, RemRepoButton, CopyRepoButton),
+  h('w100% b0 bt1x bSolid bcD brad10x'),hi('first:ml.5 mr.5 nth2mr0 mt.5')
 );
 
 
@@ -118,6 +109,9 @@ const RepoHeader = Div(
 
 // Repo File Tree
 const Circ = Circle(withModal(Pre(withItems(`file click functionality not implemented yet`))));
+const CircText = Text(
+  withProps({dy:'0.35em',x:-6,textAnchor:'end'}), withItems(get('data')), withStyles('peN usN t8px')
+);
 const TreeComponent = ({node,parentNode,id,getPath,getColor})=>(
   <g key={id}>
     <path d={getPath(parentNode,node)} style={{fill:'none',stroke:'#ccc',strokeWidth:'1px'}}></path>
@@ -125,8 +119,8 @@ const TreeComponent = ({node,parentNode,id,getPath,getColor})=>(
       <TreeComponent getPath={getPath} getColor={getColor} parentNode={node} node={c} id={`${id}.${i}`} key={`${id}.${i}`} />
     ))}
     <g transform={`translate(${node.y},${node.x})`}>
-      <Circ r={4} style={{fill:getColor(node),stroke:'#ccc',strokeWidth:'1px'}} />
-      <text dy={'0.35em'} x={-6} textAnchor={'end'} style={{pointerEvents:'none',userSelect:'none',font:'8px sans-serif'}}>{node.data.name}</text>
+      <Circ data={node.data.path} r={4} style={{fill:getColor(node),stroke:'#ccc',strokeWidth:'1px'}} />
+      <CircText data={node.data.name}/>
     </g>
   </g>
 );
@@ -181,8 +175,7 @@ const MaintainabilityRuleHelpTrigger = Span(withItems(QMark),withModal(Maintaina
 const MaintainabilityRule = Span(withItems('Maintainability',MaintainabilityRuleHelpTrigger),h,hi);
 const Rules = Div(
   withItems('Rules',MaintainabilityRule,EffortRule,CyclomaticRule),
-  v,
-  vi('t0.8 mt0.5',`nth1bgc${reds[4]} nth2bgc${reds[3]}`,
+  v, vi('t0.8 mt0.5',`nth1bgc${reds[4]} nth2bgc${reds[3]}`,
     `nth3bgc${reds[2]} nth4bgc${reds[1]} nth5bgc${reds[0]}`)
 );
 
@@ -220,8 +213,6 @@ const GridCellRulesImpact = Div(
         {backgroundColor:reds[4],width:(node.maintainability/node.maintainabilityMax)*100},
         {backgroundColor:reds[3],width:(node.effort/node.effortMax)*100},
         {backgroundColor:reds[2],width:(node.cyclomatic/node.cyclomaticMax)*100},
-        // {backgroundColor:reds[1],width:(node.params/repo.paramsMax)*100},
-        // {backgroundColor:reds[0],width:(node.loc/repo.locMax)*100},
       ]);
       return styles.map((s,i,c)=>{
         const lastWidth = i===0 ? 0: c[i-1].width;
@@ -230,12 +221,10 @@ const GridCellRulesImpact = Div(
     }),
   )),
 );
+
 const MetricsBody = Div(
   withItems(
-    PathHeader,
-    RulesImpact,
-    CostPerChange,
-    UserImpact,
+    PathHeader, RulesImpact, CostPerChange, UserImpact,
     pipe(
       ({data:repoid})=>nodeAnalyses_by_repoid$.map(get(repoid)),
       dropRepeats,
@@ -243,10 +232,7 @@ const MetricsBody = Div(
         sortBy('costPerChange'),
         reverse,
         slice(0,10),
-        mx(pipe(
-          ({id})=>({data:id}),
-          toItemProps(GridCellPath,GridCellRulesImpact,GridCellCostPerChange,GridCellUserImpact)
-        )),
+        mapIdsTo(GridCellPath,GridCellRulesImpact,GridCellCostPerChange,GridCellUserImpact),
       ))
     )
   ),
@@ -254,48 +240,39 @@ const MetricsBody = Div(
   gi('mb.3 nthn-+4mb1','nthn4-3w19%_mr1% nthn4-2w44%_mr1% nthn4-1w19%_mr1% nthn4w14%_mr1%')
 );
 
-// Dev Cost and Time Per Change Adjustments
-const TimePerChangeText = Span(withItems(TIME_PER_CHANGE_HELP),v('wsPL'));
-const TimePerChangeHelp = Span(withItems(QMark),withModal(TimePerChangeText));
-const TimePerChangeLabel = Label(withItems('Time Per Change'),h('t0.8'));
-const TimePerChange = TextInput(
-  mapProp({defaultValue:repos_changetime_by_id$}),
-  pipeChanges(from_target_value,to_repo_changetime$),
-  h('w3')
-);
 
-const DevCostPerHourText = Span(withItems(`Developer Hourly Rate, to calculate cost per change.`),v('wsPL'));
-const DevCostPerHourHelp = Span(withItems(QMark),withModal(DevCostPerHourText));
-const DevCostPerHourLabel = Label(withItems('Dev Hourly Cost'),h('t0.8'));
+
+// Dev Cost and Time Per Change Adjustments
 const DevCostPerHour = Input(
   mapProp({defaultValue:repos_devcost_by_id$}),
   pipeChanges(from_target_value,to_repo_devcost$),
   h('w3')
 );
+const dcText = Span(withItems(`Developer Hourly Rate, to calculate cost per change.`),v('wsPL'));
+const dcHelp = Span(withItems(QMark),withModal(dcText));
+const dcLabel = Label(withItems('Dev Hourly Cost'),h('t0.8'));
 
-const MetricsParams = Div(withItems(
-  TimePerChangeLabel, TimePerChangeHelp, TimePerChange,
-  DevCostPerHourLabel, DevCostPerHourHelp, DevCostPerHour,
-),h('mtAuto'),hi('ml.5'));
+const TimePerChange = TextInput(
+  mapProp({defaultValue:repos_changetime_by_id$}),
+  pipeChanges(from_target_value,to_repo_changetime$),
+  h('w3')
+);
+const tpcText = Span(withItems(TIME_PER_CHANGE_HELP),v('wsPL'));
+const tpcHelp = Span(withItems(QMark),withModal(tpcText));
+const tpcLabel = Label(withItems('Time Per Change'),h('t0.8'));
+
+const MetricsParams = Div(
+  withItems(tpcLabel, tpcHelp, TimePerChange, dcLabel, dcHelp, DevCostPerHour),
+  h('mtAuto'),hi('ml.5')
+);
 
 const FileMetrics = Div( withItems(MetricsBody,MetricsParams), v,vi('mb.5'));
 
-const Repo = Div(
-  withItems(TreeSVG,Rules,FileMetrics),
-  h('lAIStretch'),hi('nth1mr1 nth2mr1')
-);
-
-const setProp = str=>(...Components)=>pipe(({[str]:data})=>({data}),toItemProps(...Components));
-const mapIdsTo = compose(ma,setProp('id'));
-const RepoList = Div(
-  withItems(repos$.map(mapIdsTo(RepoHeader,Repo))),
-  v,vi('mb.5')
-);
+const Repo = Div(withItems(TreeSVG,Rules,FileMetrics), h('lAIStretch'),hi('nth1mr1 nth2mr1'));
+const RepoList = Div(withItems(repos$.map(mapIdsTo(RepoHeader,Repo))), v,vi('mb.5 w100%'));
 // Header
 const AppLogo = Img(withProps({ src:logo, alt:'Cost Per Change Logo'}));
 const AppHeader = Header(withItems(AppLogo), h('lAIC lJCC bgF w100%'), hi('h80x') );
 
-//App
-
-const App = Div(withItems(AppHeader, TokenArea, RepoList, getModalComponent()), v, vi('mb1'));
+const App = Div(withItems(AppHeader, TokenArea, RepoList, getModalComponent()), v, vi('mb1 w100%'));
 export default App

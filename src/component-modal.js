@@ -6,6 +6,8 @@ import {stubNull,compose,pipe} from './utils.js';
 import {xs,map,debounce,debug,startWith,fold} from './xstream-fp.js';
 import xstreamConfig from 'recompose/xstreamObservableConfig';
 
+// great modal styling article
+// https://css-tricks.com/considerations-styling-modal/
 const componentFromStream = componentFromStreamWithConfig(xstreamConfig);
 const {handler,stream} = createEventHandler();
 
