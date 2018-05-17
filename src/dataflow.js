@@ -44,6 +44,25 @@ const mapPropFactory = (dataKey='data')=>obj=>{
 }
 export const mapProp = mapPropFactory();
 
+// redundant - time crunch - needs cleanup
+const ensureStreamGetters = cond([
+  [isFunction,fn=>props=>ensureObservable(fn(props))],
+  [isString,string=>prop=>map(get(string))(store$)],// can cache these
+  [isObservable,s$=>props=>s$],
+]);
+export const addProps = obj=>{
+  const keys=[];
+  const getters=[];
+  for(let k in obj){
+    keys[keys.length] = k;
+    getters[getters.length] = ensureStreamGetter(obj[k]);
+  };
+  return mapPropsStream(pipe(
+    flatMap(props=>combine$(of$(props),...getters.map(fn=>fn(props)))),
+    map(([props,...latestVals])=>latestVals.reduce((acc,v,i)=>{acc[keys[i]]=v;return acc;},{...props})),
+  ));
+}
+
 export const from_target_value = pget({value:'target.value',data:'data'});
 
 const getHandler = (...fns)=>{

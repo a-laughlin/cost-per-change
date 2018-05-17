@@ -32,6 +32,7 @@ export const is = val1=>val2=>val1===val2;
 export const isUndefOrNull = val => val == undefined; // eslint-disable-line
 export const isPromise = x=>!isUndefOrNull(x) && isFunction(x.then);
 export const {isArray} = Array;
+export const len = num=>({length})=>length===num;
 export const len0 = ({length})=>length===0;
 export const len1 = ({length})=>length===1;
 export const first = get(0);

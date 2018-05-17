@@ -7,7 +7,7 @@ import {schemeReds,scaleOrdinal,interpolateReds} from 'd3-scale-chromatic';
 import logo from './cost-per-change.png';
 import './App.css';
 import {pipe,compose,plog,ensureArray, mx, ma, get, ifElse,cond,stubNull,isUndefined,round,sortBy,
-  fa, pget,reverse,slice
+  fa, pget,reverse,slice,is,len
 } from './utils.js';
 import {of$,combine$,map,debug,debounce,dropRepeats} from './utils$.js';
 import {getModalComponent,getModalHOC} from './component-modal.js';
@@ -18,7 +18,7 @@ import {repos$,repos_devcost_by_id$,repos_changetime_by_id$, to_repo_devcost$, t
   from_target_value,repoNodes_by_repoid$,mapProp,repoNodes$,repos_id$,repoNodeOutEdges$,
   userToken$, to_userToken$,to_repo_copy,to_repo_remove,to_repo_url,repoNodeOutEdges_by_repoid$,
   repoNodes_costPerChange$,repoNodes_userImpact$,repos_by_repoNode_id$,pipeCollection,
-  repoNodes_path$,nodeAnalyses$,nodeAnalyses_by_repoid$
+  repoNodes_path$,nodeAnalyses$,nodeAnalyses_by_repoid$,addProps
 } from './dataflow.js';
 
 import {Circle,Text,Div,Span,Img,H1,Input,A,Label,Svg,TextInput,Button,Header,Pre,P,toItemProps,
@@ -66,14 +66,20 @@ const QMark = Span(withItems('?'),
 
 // User / Info Section
 const TokenTextInput = TextInput(
-  mapProp({defaultValue:'userTokens.0.value'}),
+  addProps({defaultValue:'userTokens.0.value'}),
   pipeChanges(pget({value:'target.value',data:'data'}),to_userToken$),
   h('w40 b0 bb1x bcD')
 );
+const TokenTextContainer = Div(withItems(
+  props=>userToken$.map(ifElse(
+    len(40),
+    ()=>TokenTextInput(props),
+    ()=>withStyles(`bgc${reds[2]}`)(TokenTextInput)(props),
+  )),
+),h('lGrow1'));
 const ghURL = `github.com/settings/tokens`;
 const ruleLink = 'https://github.com/escomplex/escomplex/blob/master/METRICS.md';
 const TokenHelpLink = A(withProps({target:'blank',href:`https://${ghURL}`}), withItems(ghURL));
-const TokenTextContainer = Div(withItems(TokenTextInput),h('lGrow1'));
 const TokenHelpMsg = Span(withItems('Get Token at: ',TokenHelpLink));
 const TokenHelp = Span(withItems(QMark),withModal(TokenHelpMsg));
 const TokenLabel = Label(withItems('GitHub Token'));
