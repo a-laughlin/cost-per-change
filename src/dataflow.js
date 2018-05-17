@@ -4,11 +4,12 @@ import {setObservableConfig,createEventHandler,mapPropsStream,componentFromStrea
 import {
   pipe,compose,mapv,plog,get,identity,pget,pgetv,ensureArray,set,isObservable,assignAll,
   mapvToArr,isFunction,ensureFunction,groupByKey,ifElse,isString,cond,stubTrue,transformToObj,
-  omitv,matches,fltrvToObj,isPlainObject,isNumber,ro
+  omitv,matches,fltrvToObj,isPlainObject,isNumber,ro,unzip,zipObject,mo,isArray
 } from './utils';
 import {of$,from$,combine$,map,debug,debounce,from,combineWith,flatten,flattenConcurrently,flattenSequentially,addListener,
   addDebugListener,setDebugListener,dropRepeats,flatMapLatest,flatMap,sampleCombine,getDebugListener,
-  removeListener,getListener,subscribe,fold,drop,periodic$,filterChangedItems,takeWhenPropChanged,filter
+  removeListener,getListener,subscribe,fold,drop,periodic$,filterChangedItems,takeWhenPropChanged,filter,
+  ensureObservable
 } from './utils$.js';
 import {analyse} from './code-analysis';
 import {asyncRepoUrlToGraph} from './api'
@@ -20,48 +21,19 @@ export const simpleStore = (initialState={})=>{
   return {store$,dispatch};
 }
 
+export const pcombine$ = cond(
+  [isString, str=>props=>map(get(str))(store$)],
+  [isArray, arr=>props=>combine$(of$(props),...arr.map(v=>pcombine$(v)(props)))],
+  [isFunction, fn=>props=>pcombine$(fn(props))(props)],
+  [isPlainObject, obj=>props=>{
+    const mapped = mo(v=>pcombine$(v)(props))(obj);
+    const [keys,vals$] = unzip(Object.entries(mapped));
+    return combine$(...vals$).map(vals=>Object.assign(zipObject(keys,vals),props));
+  }],
+  [stubTrue,arg=>props=>ensureObservable(arg)],
+);
+export const hpcombine$ = compose(mapPropsStream,flatMap,pcombine$);
 
-const tplRegex = /\[prop\]\.|\.?prop\./g;
-const tpl = string=>prop=>string.replace(tplRegex,`[${prop}].`);
-const ensureObservable = ifElse(isObservable,identity,of$);
-const ensureStreamGetter = cond([
-  [isFunction,fn=>prop=>ensureObservable(fn(prop))],
-  [isObservable,s$=>prop=>s$.map(get(prop))],
-  [isString,string=>prop=>map(get(tpl(string)(prop)))(store$)],// can cache these
-  [stubTrue,x=>prop=>of$(x)],
-]);
-const mapPropFactory = (dataKey='data')=>obj=>{
-  const keys=[dataKey];
-  const getters=[prop=>of$(prop)];
-  for(let k in obj){
-    keys[keys.length] = k;
-    getters[getters.length] = ensureStreamGetter(obj[k]);
-  };
-  return mapPropsStream(pipe(
-    flatMap(props=>combine$(...getters.map(fn=>fn(props[dataKey])))),
-    map(latestVals=>latestVals.reduce((acc,v,i)=>{acc[keys[i]]=v;return acc;},{})),
-  ));
-}
-export const mapProp = mapPropFactory();
-
-// redundant - time crunch - needs cleanup
-const ensureStreamGetters = cond([
-  [isFunction,fn=>props=>ensureObservable(fn(props))],
-  [isString,string=>prop=>map(get(string))(store$)],// can cache these
-  [isObservable,s$=>props=>s$],
-]);
-export const addProps = obj=>{
-  const keys=[];
-  const getters=[];
-  for(let k in obj){
-    keys[keys.length] = k;
-    getters[getters.length] = ensureStreamGetter(obj[k]);
-  };
-  return mapPropsStream(pipe(
-    flatMap(props=>combine$(of$(props),...getters.map(fn=>fn(props)))),
-    map(([props,...latestVals])=>latestVals.reduce((acc,v,i)=>{acc[keys[i]]=v;return acc;},{...props})),
-  ));
-}
 
 export const from_target_value = pget({value:'target.value',data:'data'});
 
@@ -69,7 +41,7 @@ const getHandler = (...fns)=>{
   const {stream,handler} = createEventHandler();
   pipe( ...fns, addListener() )(stream);
   return handler;
-}
+};
 
 // Store only contains collections.  Everything else is derived.
 // collections named like repo,repofile - id property matches the collection
@@ -112,12 +84,13 @@ const getHandler = (...fns)=>{
 const tapUpdater = updater=>pipe(plog('prevState'),updater,plog('nextState'));
 // const tapUpdater = identity;
 // const store = createStore((state=initialState,{updater=identity})=>updater(state));
-Object.assign(initialState.userTokens,{'1':{id:'1',value:'a'}});
 const store = createStore((state,{updater=identity})=>tapUpdater(updater)(state),initialState);
 const store$ = from$(store[Symbol.observable]()).drop(1).startWith(initialState);
 const dispatch = store.dispatch.bind(store);
 
 // data is props.data
+const tplRegex = /\[prop\]\.|\.?prop\./g;
+const tpl = string=>data=>string.replace(tplRegex,`[${data}].`);
 const setStateX = str=>({value,data=''})=>{dispatch({type:'fn',updater:state=>set(tpl(str)(data),value,state)}); return value; };
 const assignToStateX = data=>{
   console.log(`data`, data);

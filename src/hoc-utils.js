@@ -14,7 +14,7 @@ import {
 } from './utils';
 import {of$,from$,take,combine$,map,toArray,periodic$,flatMap as flatMap$,combineWith,
   flattenSequentially,flattenConcurrently,buffer,never$,addDebugListener,debug,
-  flattenDeep as flattenDeep$
+  flattenDeep as flattenDeep$,ensureObservable
 } from './utils$.js';
 
 
@@ -88,7 +88,7 @@ export const withItemsHOCFactory = (function() {
     [stubTrue,(x,props)=>console.log(`unknown:`,x)||Elem('pre',props,`unknown item type passed - received: ${JSON.stringify(x,null,2)}`)],
   ]);
 
-  const ensureObservable = ifElse(isObservable,identity,of$);
+
   const normalizePipes = childrenProps=>mapv(pipe(
     x=>xToElements(x,childrenProps),// unwrap functions, including any that return observables
     ensureObservable,

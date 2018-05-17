@@ -61,6 +61,7 @@ flatMapLatest,
 toArray
 } = xsfp;
 
+export const ensureObservable = arg=>isObservable(arg)?arg:of$(arg);
 export const flattenDeep = flatMap(x=>{
   return isObservable(x)?flattenDeep(x):of$(x);
 });

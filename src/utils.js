@@ -7,7 +7,7 @@ import {
   isInteger,isError,isNumber,isObjectLike,hasIn,has,isWeakMap, isWeakSet, isMap, isSet,isEmpty,
   isString, isPlainObject, isFunction, isNull,isUndefined,set,unset,curry,mergeAllWith as mergeAllWithFP,mergeAll as mergeAllFP,
   omitBy,rearg,rangeStep,assignAll as assignAllFP,assignAllWith as assignAllWithFP,ary as arity,
-  unary,sortBy,keyBy,kebabCase,size,partition,every,values,keys
+  unary,sortBy,keyBy,kebabCase,size,partition,every,values,keys,zip,unzip,zipObject
 } from 'lodash/fp';
 import {merge,mergeWith,set as _set,debounce as _debounce,memoize as _memoize} from 'lodash';
 import $$observable from 'symbol-observable';
@@ -21,7 +21,7 @@ export {
   findKey,uniqueId,findIndex,set,mergeWith,reject,concat,constant,flatMap,flattenDeep,omit,
   isInteger,isError,isNumber,isObjectLike,hasIn,has,isWeakMap, isWeakSet, isMap, isSet,isEmpty,
   isString, isPlainObject, isFunction, isNull,isUndefined,_set,unset,pickBy,curry,omitBy,sortBy,
-  rearg,rangeStep,over,kebabCase,size,partition,every,values,keys
+  rearg,rangeStep,over,kebabCase,size,partition,every,values,keys,zip,unzip,zipObject
 }
 
 

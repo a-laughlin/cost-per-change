@@ -7,7 +7,7 @@ import {schemeReds,scaleOrdinal,interpolateReds} from 'd3-scale-chromatic';
 import logo from './cost-per-change.png';
 import './App.css';
 import {pipe,compose,plog,ensureArray, mx, ma, get, ifElse,cond,stubNull,isUndefined,round,sortBy,
-  fa, pget,reverse,slice,is,len
+  fa, pget,reverse,slice,is,len,condNoExec as nxcond,matches,stubTrue
 } from './utils.js';
 import {of$,combine$,map,debug,debounce,dropRepeats} from './utils$.js';
 import {getModalComponent,getModalHOC} from './component-modal.js';
@@ -18,7 +18,7 @@ import {repos$,repos_devcost_by_id$,repos_changetime_by_id$, to_repo_devcost$, t
   from_target_value,repoNodes_by_repoid$,mapProp,repoNodes$,repos_id$,repoNodeOutEdges$,
   userToken$, to_userToken$,to_repo_copy,to_repo_remove,to_repo_url,repoNodeOutEdges_by_repoid$,
   repoNodes_costPerChange$,repoNodes_userImpact$,repos_by_repoNode_id$,pipeCollection,
-  repoNodes_path$,nodeAnalyses$,nodeAnalyses_by_repoid$,addProps
+  repoNodes_path$,nodeAnalyses$,nodeAnalyses_by_repoid$,hpcombine$,pcombine$
 } from './dataflow.js';
 
 import {Circle,Text,Div,Span,Img,H1,Input,A,Label,Svg,TextInput,Button,Header,Pre,P,toItemProps,
@@ -30,12 +30,6 @@ import {ABOUT_HELP,REPO_URL_HELP,TIME_PER_CHANGE_HELP,CYCLOMATIC_HELP,MAINTAINAB
   EFFORT_HELP
 } from './help-messages.js';
 
-
-// TODO: Repo loading spinner.
-// TODO: Token field flash red if try to load a repo without a token.
-// TODO: LocalStorage token.
-// TODO: Stacked bar chart in table - current vs. optimal
-// TODO: Repo metrics - maybe as background behind stacked bar.
 
 // HOCs
 const withModal = getModalHOC();
@@ -66,17 +60,15 @@ const QMark = Span(withItems('?'),
 
 // User / Info Section
 const TokenTextInput = TextInput(
-  addProps({defaultValue:'userTokens.0.value'}),
+  hpcombine$({defaultValue:'userTokens.0.value'}),
   pipeChanges(pget({value:'target.value',data:'data'}),to_userToken$),
   h('w40 b0 bb1x bcD')
 );
-const TokenTextContainer = Div(withItems(
-  props=>userToken$.map(ifElse(
-    len(40),
-    ()=>TokenTextInput(props),
-    ()=>withStyles(`bgc${reds[2]}`)(TokenTextInput)(props),
-  )),
-),h('lGrow1'));
+const pipePoly = arg=>(...fns)=>pipe(pcombine$(arg),...fns);
+const TokenTextContainer = Div(withItems(pipePoly({token:userToken$})(map(nxcond(
+  [matches({token:len(40)}),TokenTextInput],
+  [stubTrue,withStyles(`bgc${reds[2]}`)(TokenTextInput) ],
+)))));
 const ghURL = `github.com/settings/tokens`;
 const ruleLink = 'https://github.com/escomplex/escomplex/blob/master/METRICS.md';
 const TokenHelpLink = A(withProps({target:'blank',href:`https://${ghURL}`}), withItems(ghURL));
@@ -95,7 +87,7 @@ const TokenArea = Div(
 
 // Repo Header
 const RepoUrlInput = TextInput(
-  mapProp({defaultValue:'repos[prop].url'}),// shouldn't need to specify data prop
+  hpcombine$({defaultValue:({data:repoid})=>`repos[${repoid}].url`}),
   pipeChanges( pget({value:'target.value',data:'data'}),to_repo_url),
   h('t1em w100% b0 bb1x')
 );
@@ -250,7 +242,7 @@ const MetricsBody = Div(
 
 // Dev Cost and Time Per Change Adjustments
 const DevCostPerHour = Input(
-  mapProp({defaultValue:repos_devcost_by_id$}),
+  hpcombine$({defaultValue:({data:repoid})=>`repos[${repoid}].devcost`}),
   pipeChanges(from_target_value,to_repo_devcost$),
   h('w3')
 );
@@ -259,7 +251,7 @@ const dcHelp = Span(withItems(QMark),withModal(dcText));
 const dcLabel = Label(withItems('Dev Hourly Cost'),h('t0.8'));
 
 const TimePerChange = TextInput(
-  mapProp({defaultValue:repos_changetime_by_id$}),
+  hpcombine$({defaultValue:({data:repoid})=>`repos[${repoid}].changetime`}),
   pipeChanges(from_target_value,to_repo_changetime$),
   h('w3')
 );
