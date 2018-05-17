@@ -71,10 +71,15 @@ export const memoize = curry(rearg([1,0],_memoize),2);
 export const debounce = curry((wait,opts,fn)=>_debounce(fn,wait,opts),3);
 
 // logic
+const makeArrayWrapperOptional = fn=>(...m)=>m[0] && isArray(m[0][0]) ? fn(m[0]) : fn(m);
+export const condNoExec = makeArrayWrapperOptional(
+  matrix=>(...args)=>{for (let [pred,fn] of matrix){if(pred(...args)){return fn;}}}
+);
+export const cond = makeArrayWrapperOptional(
+  matrix=>(...args)=>condNoExec(...(matrix))(...args)(...args)
+)
 export const ifElse = (predicate,ifTrue,ifFalse=identity)=>(...args)=>((predicate(...args) ? ifTrue : ifFalse)(...args));
 export const elseIf = (ifTrue,ifFalse)=>predicate=>ifElse(predicate,ifTrue,ifFalse);
-export const condNoExec = matrix=>(...args)=>{for (let [pred,fn] of matrix){if(pred(...args)){return fn}}};
-export const cond = (matrix)=>(...args)=>condNoExec(matrix)(...args)(...args);
 export const and = rest(overEvery);
 export const not = negate;
 export const none = negate(overEvery);
@@ -83,14 +88,13 @@ export const xor = fn=>pipe(filter(fn),len1);
 // debugging
 export const plog = (fromDev)=>(...fromPipe)=>{console.log(fromDev,...fromPipe);return fromPipe[0];}
 
+
 // casting
 export const argsToArray = rest;
-export const arrayToArgs = fn=>arr=>fn(...ensureArray(arr));
+export const arrayToArgs = spread;
 export const ensureArray = (val=[])=>isArray(val) ? val : [val];
-export const ensureArgsArray = (...args)=>isArray(args[0])?args[0]:args;
-export const acceptsArgsOrArray = fn=>pipe(argsToArray(flattenDeep),fn);
 export const ensureFunction = ifElse(isFunction,identity,constant)
-export const ensureProp = stubFn=>(obj,key)=>obj.hasOwnProperty(key) ? obj[key] : (obj[key]=stubFn());
+export const ensureProp = fn=>(obj,key)=>obj.hasOwnProperty(key) ? obj[key] : (obj[key]=fn());
 export const ensureArrayProp = ensureProp(stubArray);
 export const ensureObjectProp = ensureProp(stubObject);
 export const arity1 = unary;
