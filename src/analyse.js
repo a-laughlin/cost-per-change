@@ -1,45 +1,44 @@
 import {analyse as ana} from 'escomplex';
 import * as babel from '@babel/standalone';
+export const analyse = (function() {
+  /*
+  Running a slew of babel presets trades:
+  - analysis speed
+  - code clarity
+  for
+  - "just works" reliability
+  - metrics consistency across files/repos/transpilations
 
-/*
-Running a slew of babel presets trades:
-- analysis speed
-- code clarity
-for
-- "just works" reliability
-- metrics consistency across files/repos/transpilations
-
-Notes:
-2015 especially mangles the code
-Per babel docs, presets run last-to-first
-*/
-
-const babelPresets = {presets:[
-  'es2015',
-  'es2016',
-  'es2017',
-  ['stage-3',{"decoratorsLegacy": true}],
-  ['stage-2',{"decoratorsLegacy": true}],
-  ['stage-1',{"decoratorsLegacy": true}],
-  ['stage-0',{"decoratorsLegacy": true}],
-  'react',
-  'typescript',
-]};
-
-export const analyse = (pathStr,codeStr)=>{
-  let code, analysis, errors;
-  try {
-    code = babel.transform(codeStr, babelPresets).code;
-    analysis = ana(code,{noCoreSize:true});
-    // console.log(`analysis: "${pathStr}"\n`, analysis);
-  } catch(e){
-    code || (code = codeStr);
-    code = `File Not Analyzed.\nERROR escomplex-ing "${pathStr}".\n:${e.message}\n\n\n` + code;
-    analysis = ana('',{noCoreSize:true});
-    console.log(`\nERROR escomplex-ing "${pathStr}".\n:${e.message}`);
-  }
-  return {code,analysis};
-};
+  Notes:
+  2015 especially mangles the code
+  Per babel docs, presets run last-to-first
+  */
+  const babelPresets = {presets:[
+    'es2015',
+    'es2016',
+    'es2017',
+    ['stage-3',{"decoratorsLegacy": true}],
+    ['stage-2',{"decoratorsLegacy": true}],
+    ['stage-1',{"decoratorsLegacy": true}],
+    ['stage-0',{"decoratorsLegacy": true}],
+    'react',
+    'typescript',
+  ]};
+  return (pathStr,codeStr)=>{
+    let code, analysis, errors;
+    try {
+      code = babel.transform(codeStr, babelPresets).code;
+      analysis = ana(code,{noCoreSize:true});
+      // console.log(`analysis: "${pathStr}"\n`, analysis);
+    } catch(e){
+      code || (code = codeStr);
+      code = `File Not Analyzed.\nERROR escomplex-ing "${pathStr}".\n:${e.message}\n\n\n` + code;
+      analysis = ana('',{noCoreSize:true});
+      console.log(`\nERROR escomplex-ing "${pathStr}".\n:${e.message}`);
+    }
+    return {code,analysis};
+  };
+}());
 
 // var estimateBigOhs = (pairsArray)=>{
  // var max=0;

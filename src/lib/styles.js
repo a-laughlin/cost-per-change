@@ -344,8 +344,8 @@ export const withItemContextStyles = mergeableHocFactory({
 /**
  * list style shorthands
  */
-export const [v,h,g] = ['lVertical','lHorizontal','lGrid'].map(s=>withStyles(s));
-export const [vi,hi,gi] = ['lVerticalItem','lHorizontalItem','lGridItem'].map(s=>withItemContextStyles(s));
+export const [v,h,g] = ['lVertical','lHorizontal','lGrid'].map(s=>withStyles(s,'tSans'));
+export const [vi,hi,gi] = ['lVerticalItem','lHorizontalItem','lGridItem'].map(s=>withItemContextStyles(s,'tSans'));
 // wireframe item shorthands
 export const [wfvi,wfhi,wfgi] = [
   ['BLUE','lVerticalItem'],['RED','lHorizontalItem'],['DARKGREEN','lGridItem']

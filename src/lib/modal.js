@@ -1,9 +1,9 @@
 import {createElement} from 'react';
-import {createEventHandler,componentFromStreamWithConfig} from 'recompose';
-import {h,withStyles as ws} from './styles';
+import {h,withStyles as ws} from './styles.js';
 import {pipeClicks,withItems,Div} from './hoc-utils.js';
 import {stubNull,compose,pipe} from './utils.js';
 import {xs,map,debounce,debug,startWith,fold} from './xstream-fp.js';
+import {createEventHandler,componentFromStreamWithConfig} from 'recompose';
 import xstreamConfig from 'recompose/xstreamObservableConfig';
 
 // great modal styling article

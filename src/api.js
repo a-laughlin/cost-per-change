@@ -1,8 +1,8 @@
 import {
   get,omit,isPlainObject,plog,objToUrlParams,uniqueId
-} from './utils'
+} from './lib/utils'
 // import * as bb from 'bluebird';
-import {composeBFWalkerAsync,extension} from './composeWalker'
+import {composeBFWalkerAsync,extension} from './lib/composeWalker'
 
 export const fFetch = (options={})=>data=>{
   if(isPlainObject(data)){
@@ -92,7 +92,7 @@ const repoPathToQueryParts = (repoPath)=>{
 const hasCode = (node)=>node.text!==undefined;
 const validFileExtensions = /\.js$|\.jsx$|\.ts$/;
 const isJsFileOrDirectory = n=>n.type==='tree'||validFileExtensions.test(n.name)
-export const asyncRepoUrlToGraph = ({id,url,token})=>{
+export const loadRepoGraph = ({id,url,token})=>{
   const {author,repo,branch,path}=repoPathToQueryParts(url);
   return composeBFWalkerAsync([
     extension.nodeMap,

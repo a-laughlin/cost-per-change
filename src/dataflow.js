@@ -1,18 +1,24 @@
-import {initialState} from './initial-state';
 import {createStore} from 'redux';
 import {setObservableConfig,createEventHandler,mapPropsStream,componentFromStream,shallowEqual} from 'recompose';
 import {
   pipe,compose,mapv,plog,get,identity,pget,pgetv,ensureArray,set,isObservable,assignAll,
   mapvToArr,isFunction,ensureFunction,groupByKey,ifElse,isString,cond,stubTrue,transformToObj,
   omitv,matches,fltrvToObj,isPlainObject,isNumber,ro,unzip,zipObject,mo,isArray
-} from './utils';
+} from './lib/utils';
 import {of$,from$,combine$,map,debug,debounce,from,combineWith,flatten,flattenConcurrently,flattenSequentially,addListener,
   addDebugListener,setDebugListener,dropRepeats,flatMapLatest,flatMap,sampleCombine,getDebugListener,
   removeListener,getListener,subscribe,fold,drop,periodic$,filterChangedItems,takeWhenPropChanged,filter,
   ensureObservable
-} from './utils$.js';
-import {analyse} from './code-analysis';
-import {asyncRepoUrlToGraph} from './api'
+} from './lib/utils$.js';
+import {analyse} from './analyse';
+import {loadRepoGraph} from './api'
+import {initialState} from './static/initial-state';
+
+const token = process.env.REACT_APP_GITHUB_TOKEN;
+
+initialState.userTokens['0'].value = process.env.REACT_APP_GITHUB_TOKEN;
+
+
 
 export const simpleStore = (initialState={})=>{
   const {stream,handler}=createEventHandler();
@@ -232,7 +238,7 @@ export const to_repo_url = getHandler(
   map(([props,allRepos,allrepoNodes,allRepoNodeOutEdges,token])=>{
     const {data:id,value:url} = props;
     console.log(`requesting`,{url,id,token});
-    asyncRepoUrlToGraph({url,id,token})
+    loadRepoGraph({url,id,token})
     .then(({repoNodes:newNodes,repoNodeOutEdges:newEdges})=>{
       console.log(`received`,newNodes,newEdges);
       let maxKey,minKey;
@@ -246,39 +252,3 @@ export const to_repo_url = getHandler(
     });
   })
 );
-
-
-// with takeWhenPropChanged, only check the ones you care about, so extra collection props don't get looped.
-// assumes that when state is set on a nested object, all the parent objects are also copied
-// const [changed_repo_urls$]=takeWhenPropChangedStreams(['url'])(repos$);
-// pipe(
-//   x=>changed_repo_urls$,
-//
-//   sampleCombine(repos$repoNodes$,repoNodeOutEdges$)
-//   sampleCombine()
-//
-// )();
-//
-//   sampleCombine(repos$,repoNodes$,repoNodeOutEdges$),
-//   converge([ // needs debouncing
-//     mapColl({// remove the current url's nodes
-//     repoNodes:compose(omitv,matches,polyGet({repoid:'id'})),
-//     repoNodeOutEdges:compose(omitv,matches,polyGet({repoid:'id'})),
-//   }),
-//   pipeAllArgsAsync( // get new nodes, set new nodes + new url
-//     map(([url,repos,repoNodes,repoNodeOutEdges])=>{
-//
-//     })
-//     from({url:'target.value',id:'id',token:'userTokens.0.value'}),
-//     plog(`allArgsAsync`),
-//     asyncRepoUrlToGraph, // get new repoNodes and repoNodeOutEdges for this repo
-//     converge({
-//       repoNodes:get('repoNodes'),
-//       repoNodeOutEdges:get('repoNodeOutEdges'),
-//       repos:from('repos'),
-//       url:from('target.value'),
-//       id:from('id')
-//     }),
-
-//
-// )
