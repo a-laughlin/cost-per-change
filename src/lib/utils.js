@@ -325,13 +325,12 @@ export const concatBefore = getMatchReplacer((predicate,getReplacement)=>collect
 
 
 // Objects
-export const pget = cond([
-  [isFunction,identity],
+export const pget = cond(
   [isString,get],
   [isArray,pick],
-  [isPlainObject, fnsObj=>targetObj=>mapv((fn,k)=>(pget(fn))(targetObj))(fnsObj)],
+  [isPlainObject, obj=>target=>mo(f=>pget(f)(target))(obj)],
   [stubTrue,identity],
-]);
+);
 
 export const objStringifierFactory = ({
   getPrefix=()=>'',
