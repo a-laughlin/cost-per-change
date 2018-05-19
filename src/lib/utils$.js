@@ -1,6 +1,8 @@
 import * as xsfp from './xstream-fp.js';
-import {pipe,isObservable} from './utils.js';
-import {setObservableConfig} from 'recompose';
+import {
+  pipe,isObservable,isArray,isPromise,isFunction,isPlainObject,mo,ma, unzip, ifElse,stubTrue,cond
+} from './utils.js';
+import {setObservableConfig,shallowEquals} from 'recompose';
 import xstreamConfig from 'recompose/xstreamObservableConfig';
 setObservableConfig(xstreamConfig);
 export const {
@@ -65,6 +67,69 @@ export const ensureObservable = arg=>isObservable(arg)?arg:of$(arg);
 export const flattenDeep = flatMap(x=>{
   return isObservable(x)?flattenDeep(x):of$(x);
 });
+//
+// export const combineArray$ = (...streams) =>{
+//   const vals=[];
+//   const firstValsReceived=[];
+//   let initialValsRemaining = streams.length;
+//   let completesRemaining = streams.length;
+//   const ins=[];
+//   const outs = {};
+//   const getCombineListener = (stream$, i)=>{
+//     let o;
+//     const listener = {
+//       next:v=>{
+//         if(!completesRemaining){return;}
+//         vals[i]=v;
+//         if(initialValsRemaining){
+//           if(!firstValsReceived[i]){
+//             firstValsReceived[i]=true;
+//             --initialValsRemaining;
+//           }
+//           if(initialValsRemaining){return;}
+//         }
+//         for (o in outs) {outs[o].next(vals)};
+//       },
+//       error:e=>{
+//         if(!completesRemaining){return;}
+//         for (o in outs) {outs[o].error(e)};
+//       },
+//       complete:()=>{
+//         if(--completesRemaining){return;}
+//         // all streams complete.  cleanup.
+//         for (o in outs) {outs[o].complete();delete outs[o];}
+//         let unsub;
+//         for (unsub of ins) {unsub();}
+//         ins.length=0;
+//         vals.length=0;
+//         firstValsReceived.length=0;
+//       },
+//     };
+//     stream$.addListener(listener);
+//     return ()=>{stream$.removeListener(listener)}
+//   };
+//
+//   let outId = 0;
+//   const producer = {
+//     start:out=>{
+//       if(!completesRemaining){return;}
+//       outs[outId++]=out;
+//       if(!ins.length){ins.push(...streams.map(getCombineListener));}
+//     },
+//     stop:x=>undefined
+//   };
+//   return create$(producer);
+// };
+
+
+
+// dropShallowEquals
+// dropDeepEquals
+// dropPropEquals
+// dropif(shallowEquals)
+// const collection$ = $(shallowEquals)
+
+
 export const filterChangedItems = (prop='')=>changedColl$=>pipe(
   fold((lastObj={},nextObj={})=>{
     let changedItems = {};
@@ -97,7 +162,7 @@ export const filterChangedItems = (prop='')=>changedColl$=>pipe(
       if(nextObj[k][prop]===lastObj[k][prop]){continue;} // no prop change
       changes++;
     }
-    console.log(`changedItems`, changedItems);
+    console.log(`changes,changedItems`, changes,changedItems);
     return changes > 0 ? changedItems : lastObj;
   },{}),
   drop(1),

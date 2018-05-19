@@ -68,7 +68,7 @@ export const fold = (...a)=>s=>s.fold(...a); // - returns MemoryStream
 export const last = (...a)=>s=>s.last(...a);
 export const map = (...a)=>s=>s.map(...a);
 export const mapTo = (...a)=>s=>s.mapTo(...a);
-export const remember = (...a)=>s=>s.remember(...a);
+export const remember = s=>s.remember();
 export const removeListener = (...a)=>s=>s.removeListener(...a);
 export const replaceError = (...a)=>s=>s.replaceError(...a);
 export const shamefullySendComplete = (...a)=>s=>s.shamefullySendComplete(...a);

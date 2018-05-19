@@ -12,12 +12,12 @@ import './static/index.css';
 import {pipe,compose,plog,ensureArray, mx, ma, get, ifElse,cond,stubNull,isUndefined,round,sortBy,
   fa, pget,reverse,slice,is,len,condNoExec as nxcond,matches,stubTrue
 } from './lib/utils.js';
-import {of$,combine$,map,debug,debounce,dropRepeats} from './lib/utils$.js';
+import {of$,combine$,map,debug,debounce,dropRepeats,flatMap,sampleCombine} from './lib/utils$.js';
 import {getModalComponent,getModalHOC} from './lib/modal.js';
 // plus a few shorthands for vertical, horizontal, and grid style flexbox HOCs
 import {v,h,g,vi,hi,gi,withStyles} from './lib/styles.js';
 
-import {repos$,repos_devcost_by_id$,repos_changetime_by_id$, to_repo_devcost$, to_repo_changetime$,
+import {repos$,to_repo_devcost$, to_repo_changetime$,
   from_target_value,repoNodes_by_repoid$,mapProp,repoNodes$,repos_id$,repoNodeOutEdges$,
   userToken$, to_userToken$,to_repo_copy,to_repo_remove,to_repo_url,repoNodeOutEdges_by_repoid$,
   repoNodes_costPerChange$,repoNodes_userImpact$,repos_by_repoNode_id$,pipeCollection,
@@ -25,13 +25,18 @@ import {repos$,repos_devcost_by_id$,repos_changetime_by_id$, to_repo_devcost$, t
 } from './dataflow.js';
 
 import {Circle,Text,Div,Span,Img,H1,Input,A,Label,Svg,TextInput,Button,Header,Pre,P,toItemProps,
-  withItemsHOCFactory, pipeClicks,pipeChanges
+  withItemsHOCFactory, pipeClicks, pipeChanges
 } from './lib/hoc-utils.js';
 
 // data imports
-import {ABOUT_HELP,REPO_URL_HELP,TIME_PER_CHANGE_HELP,CYCLOMATIC_HELP,MAINTAINABILITY_HELP,
-  EFFORT_HELP
-} from './static/help-messages.js';
+import {ABOUT_HELP,REPO_URL_HELP,TIME_PER_CHANGE_HELP,CYCLOMATIC_HELP,MAINTAINABILITY_HELP,EFFORT_HELP} from './static/help-messages.js';
+
+// things for a talk
+// explain Div()
+// explain each of the basic hocs
+// every element's children are a list of other elements, or a string
+// show a sidebar with the definitions for each part
+// only one type
 
 
 // HOCs
@@ -120,43 +125,51 @@ const TreeComponent = ({node,parentNode,id,getPath,getColor})=>(
       <TreeComponent getPath={getPath} getColor={getColor} parentNode={node} node={c} id={`${id}.${i}`} key={`${id}.${i}`} />
     ))}
     <g transform={`translate(${node.y},${node.x})`}>
-      <Circ data={node.data.path} r={4} style={{fill:getColor(node),stroke:'#ccc',strokeWidth:'1px'}} />
+      <Circ data={node.data.id} r={4} style={{fill:getColor(node.data),stroke:'#ccc',strokeWidth:'1px'}} />
       <CircText data={node.data.name}/>
     </g>
   </g>
 );
 
 const TreeSVG = Svg(
-  withItems(pipe(
-    ({data:repoid})=>combine$(repoNodeOutEdges_by_repoid$,repoNodes_by_repoid$, nodeAnalyses_by_repoid$).map(mx(get(repoid))),
-    map(([repoNodeOutEdges,repoNodes, analyses])=>{
-      const rootNodes = {...repoNodes};
-      const adjList = mx((outEdgeObj,nodeKey)=>outEdgeObj.edges.map((edgeKey)=>{
-        delete rootNodes[edgeKey];
-        return repoNodes[edgeKey];
-      }))(repoNodeOutEdges);
+  withItems(
+    pipe(
+      ({data:repoid})=>repos$.map(get(`${repoid}.id`)),
+      map(plog(`debug before`)),
+      dropRepeats,
+      map(plog(`debug after`)),
+      sampleCombine( repoNodeOutEdges_by_repoid$, repoNodes_by_repoid$, nodeAnalyses_by_repoid$),
+      map(([repoid,eidx,nidx, aidx])=>{
+        const [repoNodeOutEdges,repoNodes, analyses]=ma(get(repoid))([eidx,nidx, aidx]);
+        console.log(`analyses`, analyses);
+        const rootNodes = {...repoNodes};
+        const adjList = mx((outEdgeObj,nodeKey)=>outEdgeObj.edges.map((edgeKey)=>{
+          delete rootNodes[edgeKey];
+          return repoNodes[edgeKey];
+        }))(repoNodeOutEdges);
 
-      // map nodes to tree object with parent, children, height, depth properties
-      const treeObj = d3.hierarchy(Object.values(rootNodes)[0]||{},n=>adjList[n.id]);
+        // map nodes to tree object with parent, children, height, depth properties
+        const treeObj = d3.hierarchy(Object.values(rootNodes)[0]||{},n=>adjList[n.id]);
 
-      const width=290;
-      const height=290;
-      const treeLayout = d3.tree().size([height,width])(treeObj) // Set size. Assigns x,y positions
-      treeLayout.x=(height-0.1*height)/2;
-      treeLayout.y=0.1*height;
-      const pathGen = d3.linkHorizontal();
-      const getPath = (parent,node)=>pathGen({source:[node.y,node.x],target:[parent.y,parent.x]});
-      const getColor = ({data:node})=>{
-        const analysis = analyses[node.id];
-        if(isUndefined(analysis)){return '#fff';}
-        const {costPerChange,costPerChangeMin,costPerChangeMax} = analysis;
-        return getRedGenerator(costPerChangeMin,costPerChangeMax)(costPerChange)
-      };
-      return toItemProps(TreeComponent)(
-        {node:treeLayout,parentNode:treeLayout,id:treeLayout.data.repoid,getPath,getColor}
-      );
-    })
-  )),
+        const width=290;
+        const height=290;
+        const treeLayout = d3.tree().size([height,width])(treeObj) // Set size. Assigns x,y positions
+        treeLayout.x=(height-0.1*height)/2;
+        treeLayout.y=0.1*height;
+        const pathGen = d3.linkHorizontal();
+        const getPath = (parent,node)=>pathGen({source:[node.y,node.x],target:[parent.y,parent.x]});
+        const getColor = (node)=>{
+          const analysis = analyses[node.id];
+          if(isUndefined(analysis)){return '#fff';}
+          const {costPerChange,costPerChangeMin,costPerChangeMax} = analysis;
+          return getRedGenerator(costPerChangeMin,costPerChangeMax)(costPerChange)
+        };
+        return toItemProps(TreeComponent)(
+          {node:treeLayout,parentNode:treeLayout,id:treeLayout.data.repoid,getPath,getColor}
+        );
+      })
+    )
+  ),
   h('minw300px minh300px')
 );
 
