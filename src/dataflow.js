@@ -123,10 +123,7 @@ export const repoNodes_path$ = pipe(map(mapv('path')),remember)(repoNodes$);
 export const userToken$ = pipe(map(get('0.value')),dropRepeats,remember)(userTokens$);
 export const to_userToken$ = setStateX('userTokens.0.value');
 
-// dropShallowEquals
-// dropDeepEquals
-// dropPropEquals
-// dropif(shallowEquals)
+
 // analyses
 export const nodeAnalyses$ = pipe(
   ()=>combine$(repoNodes$,repos$),
