@@ -48,14 +48,22 @@ export const getListener = ({
   error=x=>{throw Error(x);},
   complete=x=>x,
 }={})=>({next,error,complete});
-export const getDebugListener = ({
-  next = n => console.log('debug next',n),
-  error = e => console.error('debug error',e),
-  complete = () => console.log('debug complete'),
-}={})=>({next,error,complete});
 export const addListener = (obj)=>s=>{s.addListener(getListener(obj));return s;} // return stream for consistent api
-export const setDebugListener = (...obj)=>s=>{s.setDebugListener(getDebugListener(...obj));return s;};
-export const addDebugListener = (...obj)=>s=>{s.addListener(getDebugListener(...obj));return s;}
+export const getDebugListener = (msg='debug')=>getListener({
+  next : console.log.bind(console,msg,'next'),
+  error : e =>{console.log(msg,'error');console.error(e);},
+  complete : console.log.bind(console,msg,'complete'),
+});
+export const setDebugListener = msg=>{
+  return typeof msg === 'string'
+    ? s=>s.setDebugListener(getDebugListener(msg))
+    : setDebugListener(getDebugListener('debug'))(msg);
+};
+export const addDebugListener = msg=>{
+  return typeof msg === 'string'
+    ? addListener(getDebugListener(msg))
+    : addDebugListener('debug')(msg);
+};
 export const imitate = (...a)=>s=>{s.imitate(...a); return s};
 
 // operators - existing stream unmodified. Receives new stream as a listener.  Return new stream.
@@ -63,24 +71,24 @@ export const debug = (...a)=>s=>s.debug(...a);
 export const drop = (...a)=>s=>s.drop(...a);
 export const endWhen = (...a)=>s=>s.endWhen(...a);
 export const filter = (...a)=>s=>s.filter(...a);
-export const flatten = s=>s.flatten();
 export const fold = (...a)=>s=>s.fold(...a); // - returns MemoryStream
 export const last = (...a)=>s=>s.last(...a);
 export const map = (...a)=>s=>s.map(...a);
 export const mapTo = (...a)=>s=>s.mapTo(...a);
-export const remember = s=>s.remember();
 export const removeListener = (...a)=>s=>s.removeListener(...a);
 export const replaceError = (...a)=>s=>s.replaceError(...a);
 export const shamefullySendComplete = (...a)=>s=>s.shamefullySendComplete(...a);
 export const shamefullySendError = (...a)=>s=>s.shamefullySendError(...a);
 export const shamefullySendNext = (...a)=>s=>s.shamefullySendNext(...a);
 export const startWith = (...a)=>s=>s.startWith(...a); // - returns MemoryStream
-export const subscribe = (obj)=>s=>s.subscribe(getListener(obj));
+export const subscribe = obj=>s=>s.subscribe(getListener(obj));
 export const take = (...a)=>s=>s.take(...a);
 // these make life easier when working with normal pipes
 export const mergeWith = (...streams)=>stream=>xs.merge(stream,...streams);
 export const combineWith = (...streams)=>stream=>xs.combine(stream,...streams);
-
+// these don't take args
+export const remember = s=>s.remember();
+export const flatten = s=>s.flatten();
 
 
 // extras operators
