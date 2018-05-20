@@ -64,70 +64,119 @@ toArray
 } = xsfp;
 
 export const ensureObservable = arg=>isObservable(arg)?arg:of$(arg);
-export const flattenDeep = flatMap(x=>{
-  return isObservable(x)?flattenDeep(x):of$(x);
-});
-//
-// export const combineArray$ = (...streams) =>{
-//   const vals=[];
-//   const firstValsReceived=[];
-//   let initialValsRemaining = streams.length;
-//   let completesRemaining = streams.length;
-//   const ins=[];
-//   const outs = {};
-//   const getCombineListener = (stream$, i)=>{
-//     let o;
-//     const listener = {
-//       next:v=>{
-//         if(!completesRemaining){return;}
-//         vals[i]=v;
-//         if(initialValsRemaining){
-//           if(!firstValsReceived[i]){
-//             firstValsReceived[i]=true;
-//             --initialValsRemaining;
-//           }
-//           if(initialValsRemaining){return;}
-//         }
-//         for (o in outs) {outs[o].next(vals)};
-//       },
-//       error:e=>{
-//         if(!completesRemaining){return;}
-//         for (o in outs) {outs[o].error(e)};
-//       },
-//       complete:()=>{
-//         if(--completesRemaining){return;}
-//         // all streams complete.  cleanup.
-//         for (o in outs) {outs[o].complete();delete outs[o];}
-//         let unsub;
-//         for (unsub of ins) {unsub();}
-//         ins.length=0;
-//         vals.length=0;
-//         firstValsReceived.length=0;
-//       },
-//     };
-//     stream$.addListener(listener);
-//     return ()=>{stream$.removeListener(listener)}
-//   };
-//
-//   let outId = 0;
-//   const producer = {
-//     start:out=>{
-//       if(!completesRemaining){return;}
-//       outs[outId++]=out;
-//       if(!ins.length){ins.push(...streams.map(getCombineListener));}
-//     },
-//     stop:x=>undefined
-//   };
-//   return create$(producer);
-// };
+export const flattenDeep = flatMapLatest(x=>(isObservable(x)?flattenDeep:of$)(x));
+const noop=()=>{};
+const identity=x=>x;
+export const operatorFactory = ({
+  statusInit = inputArr=>{
+    let initialValsRemaining = inputArr.length;
+    let completesRemaining = inputArr.length;
+    const firstValsReceived = [];
+    return {
+      inputNextReceived:(i)=>{
+        if(initialValsRemaining===0){return;}
+        if(!firstValsReceived[i]){
+          firstValsReceived[i]=true;
+          --initialValsRemaining;
+        }
+      },
+      inputCompleteReceived:()=>{
+        if(--completesRemaining<1){return;}
+        firstValsReceived.length=0;
+      },
+      isComplete:()=>completesRemaining===0,
+      isNotComplete:()=>completesRemaining!==0,
+      isAllInputActive:()=>initialValsRemaining===0,
+    };
+  },
+  onStop = noop,
+  setMemoryOnComplete = identity,
+  // if(shouldStart(completesRemaining===0,initialValsRemaining===0)!==true){return;}
+  onNextAfterAll = (v,mem,send)=>{send(v);return v;},
+  onNextAfterAllInit = (v,mem,send)=>{send(v);return v;},
+  onNextBeforeAll = identity,
+  onNextBeforeAllInit = identity,
+  onErrorBeforeAll = (e,lastv,send)=>{send(e);},
+  onErrorAfterAll = (e,lastv,send)=>{send(e);},
+  onStartNew = (inputArr,getListener)=>inputArr.map(getListener),
+  onStartAfterComplete = (mem,out)=>{out.next(mem);out.complete();},
+}={})=> (...streams) =>{
+  // lazy function definitions eliminate conditionals in next/error/complete fns
+  let nextb4All = (...args)=>{nextb4All = onNextBeforeAll;return onNextBeforeAllInit(...args);};
+  let nextAfterAll = (...args)=>{onNextFn = onNextAfterAll;return onNextAfterAllInit(...args);};
+  let onNextFn = (...args)=>(isAllInputActive()?nextAfterAll:nextb4All)(...args);
+  let onErrFn = (...args)=>(isAllInputActive()?(onErrFn = onErrorAfterAll):onErrorBeforeAll)(...args);
 
-
+  let mem,inputSubscriptions,sendNext,sendErr,sendComplete;
+  const {isComplete,isAllInputActive,inputNextReceived,inputCompleteReceived}=statusInit(streams);
+  const getCombineListener = (stream$, i)=>{
+    // console.log(`getCombineListener`, stream$,i);
+    const listener = {
+      next:v=>{
+        inputNextReceived(i);
+        mem = onNextFn(v,mem,sendNext);
+      },
+      error:e=>{onErrFn(e,mem,sendErr)},
+      complete:()=>{
+        inputCompleteReceived(i);
+        if(!isComplete()){return;}
+        // all input streams complete.  cleanup.
+        mem = setMemoryOnComplete(mem);
+        let L=inputSubscriptions.length;
+        while (--L) {inputSubscriptions[L]();}
+        inputSubscriptions.length=0;
+        inputSubscriptions=null;
+        sendNext=null;
+        sendErr=null;
+        sendComplete();
+        sendComplete=null;
+      },
+    };
+    stream$.addListener(listener);
+    return ()=>{stream$.removeListener(listener)}
+  };
+  let outs=[];
+  const producer = {
+    start:out=>{
+      if(isComplete()){onStartAfterComplete(mem,out);return;}
+      sendNext=out.next.bind(out); // oo lib...
+      sendErr=out.error.bind(out);
+      sendComplete=out.complete.bind(out);
+      inputSubscriptions = onStartNew(streams,getCombineListener);
+    },
+    stop:onStop
+  };
+  return create$(producer);
+};
 
 // dropShallowEquals
 // dropDeepEquals
 // dropPropEquals
 // dropif(shallowEquals)
 // const collection$ = $(shallowEquals)
+export const $if = (predicate=stubTrue)=>operatorFactory({
+  onNextAfterAllInit : (last,next)=>({last,next}),
+  onNextAfterAll : (next,mem,send)=>{
+    if(predicate(mem.next,next)){send(next);}
+    mem.last=mem.next;
+    mem.next=next;
+    return mem;
+  },
+  onStartAfterComplete:({last,next},out)=>{predicate(last,next) && out.next(next); out.complete();},
+});
+export const $ifnot = pipe(fn=>(...args)=>!fn(...args),$if);
+
+// const randomVal$ = pipe(
+//   ()=>periodic$(500),
+//   map(v=>['a','a','b','c','c'][v]),
+//   take(5),
+//   $if((last,next)=>last!==next),
+//   addDebugListener('abug'),
+// )();
+// addDebugListener('abug')(randomVal$);
+// setTimeout(()=>{
+//   addDebugListener('cbug')(randomVal$);
+// },5000)
 
 
 export const filterChangedItems = (prop='')=>changedColl$=>pipe(
@@ -162,7 +211,7 @@ export const filterChangedItems = (prop='')=>changedColl$=>pipe(
       if(nextObj[k][prop]===lastObj[k][prop]){continue;} // no prop change
       changes++;
     }
-    console.log(`changes,changedItems`, changes,changedItems);
+    // console.log(`changes,changedItems`, changes,changedItems);
     return changes > 0 ? changedItems : lastObj;
   },{}),
   drop(1),
