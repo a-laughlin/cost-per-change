@@ -22,7 +22,8 @@ import {repos$,to_repo_devcost$, to_repo_changetime$,
   from_target_value,repoNodes_by_repoid$,repoNodes$,repos_id$,repoNodeOutEdges$,
   userToken$, to_userToken$,to_repo_copy,to_repo_remove,to_repo_url,repoNodeOutEdges_by_repoid$,
   repoNodes_costPerChange$,repoNodes_userImpact$,repos_by_repoNode_id$,pipeCollection,
-  repoNodes_path$,nodeAnalyses$,nodeAnalyses_by_repoid$,get$,hget$,idxMapFactory,d3TreeStructure_by_repoid$
+  repoNodes_path$,nodeAnalyses$,nodeAnalyses_by_repoid$,get$,hget$,idxMapFactory,d3TreeStructure_by_repoid$,
+  analysisMods_by_repoid$, to_analysisMods_devcost, to_analysisMods_changetime,
 } from './dataflow.js';
 
 import {Circle,Text,Div,Span,Img,H1,Input,A,Label,Svg,TextInput,Button,Header,Pre,P,toItemProps,
@@ -116,30 +117,30 @@ const pathGen = d3.linkHorizontal();
 const getPath = (parent,node)=>pathGen({source:[node.y,node.x],target:[parent.y,parent.x]});
 const getColor = ife(isUndefined,x=>'#fff',
   ({costPerChangeMin:n,costPerChangeMax:x,costPerChange:c})=>getRedGenerator(n,x)(c));
-const Circ = Circle(withModal(Pre(c(`file click functionality not implemented yet`))));
+const Circ = Circle(
+  hget$(idx(nodeAnalyses$,getColor,fill=>({r:4,style:{fill,stroke:'#ccc',strokeWidth:'1px'}}))),
+  withModal(Pre(c(`file click functionality not implemented yet`)))
+);
 const CircText = Text(withProps({dy:'0.35em',x:-6,textAnchor:'end'}), c(get('data')), styl('peN usN t8px'));
-const Tree = ({node,parentNode,id,analyses})=>(
+const TreeRoot = ({node,parentNode,id,analyses})=>(
   <g key={id}>
     <path d={getPath(parentNode,node)} style={{fill:'none',stroke:'#ccc',strokeWidth:'1px'}}></path>
     {ensureArray(node.children).map((c,i)=>(
-      <Tree getColor={getColor} analyses={analyses} parentNode={node} node={c} id={`${id}.${i}`} key={`${id}.${i}`} />
+      <TreeRoot parentNode={node} node={c} id={`${id}.${i}`} key={`${id}.${i}`} />
     ))}
     <g transform={`translate(${node.y},${node.x})`}>
-      <Circ data={node.data.id} r={4} style={{fill:getColor(analyses[node.data.id]),stroke:'#ccc',strokeWidth:'1px'}} />
+      <Circ data={node.data.id} />
       <CircText data={node.data.name}/>
     </g>
   </g>
 );
 
 const TreeSVG = Svg(
-  c(pipe(
-    idx(repos$,'id'), dropRepeats, map(data=>({data})),
-    idx(d3TreeStructure_by_repoid$,nodeAnalyses_by_repoid$,(treeObj, analyses)=>{
-      const w=290, h=290;
-      const root = Object.assign(d3.tree().size([h,w])(treeObj),{x:(h-0.1*h)/2,y:0.1*h});
-      return toItemProps(Tree)({node:root,parentNode:root,analyses,id:root.data.repoid});
-    }),
-  )),
+  c(idx(d3TreeStructure_by_repoid$,(treeObj)=>{
+    const w=290, h=290;
+    const root = Object.assign(d3.tree().size([h,w])(treeObj),{x:(h-0.1*h)/2,y:0.1*h});
+    return toItemProps(TreeRoot)({node:root,parentNode:root,id:root.data.repoid});
+  })),
   h('minw300px minh300px')
 );
 
@@ -216,8 +217,8 @@ const MetricsBody = Div(
 
 // Dev Cost and Time Per Change Adjustments
 const DevCostPerHour = Input(
-  hget$({defaultValue:idx(repos$,'devcost')}),
-  pipeChanges(from_target_value,to_repo_devcost$),
+  hget$({defaultValue:idx(analysisMods_by_repoid$,'devcost')}),
+  pipeChanges(from_target_value,to_analysisMods_devcost),
   h('w3 t0.8')
 );
 const dcText = Span(c(`Developer Hourly Rate, to calculate cost per change.`),v('wsPL'));
@@ -225,8 +226,8 @@ const dcHelp = Span(c(QMark),withModal(dcText));
 const dcLabel = Label(c('Dev Hourly Cost'),h('t0.8'));
 
 const TimePerChange = TextInput(
-  hget$({defaultValue:idx(repos$,'changetime')}),
-  pipeChanges(from_target_value,to_repo_changetime$),
+  hget$({defaultValue:idx(analysisMods_by_repoid$,'changetime')}),
+  pipeChanges(from_target_value,to_analysisMods_changetime),
   h('w3 t0.8')
 );
 const tpcText = Span(c(TIME_PER_CHANGE_HELP),v('wsPL'));

@@ -15,8 +15,6 @@ import {of$,from$,combine$,map,debug,debounce,from,combineWith,flatten,flattenCo
 import {analyse} from './analyse';
 import {loadRepoGraph} from './api'
 import {initialState} from './static/initial-state';
-initialState.userTokens['0'].value = process.env.REACT_APP_GITHUB_TOKEN;
-
 
 export const simpleStore = (initialState={})=>{
   const {stream,handler}=createEventHandler();
@@ -26,15 +24,15 @@ export const simpleStore = (initialState={})=>{
 }
 export const get$ = cond(
   // ordering based on lodash source code, for minimum checks
-  [or(isString,isNumber),s=>v=>isObservable(v)?map(_get(s))(v):of$(_get(s)(v))],
+  [or(isString,isNumber),s=>props=>of$(s)],
   [isObservable,obs$=>props=>obs$],
   [isArray,arr=>props=>combine$(of$(props),...arr.map(v=>get$(v)(props)))],
   [isFunction, fn=>props=>get$(fn(props))(props)],
   [isPromise, prom=>props=>fromPromise$(prom)],
-  [isObjectLike, obj=>target=>{
-    const mapped = mo(v=>get$(v)(target))(obj);
+  [isObjectLike, obj=>props=>{
+    const mapped = mo(v=>get$(v)(props))(obj);
     const [keys,vals$] = unzip(Object.entries(mapped));
-    return combine$(...vals$).map(vals=>Object.assign(zipObject(keys,vals),target));
+    return combine$(...vals$).map(vals=>Object.assign(zipObject(keys,vals),props));
   }],
   [stubTrue,x=>props=>ensureObservable(x)],
 );
@@ -60,37 +58,10 @@ const getHandler = (...fns)=>{
 
 
 
-// possible fns
-// set, merge, remove
-// const setMatchingItems (str,matcher)(value)=>
-// const setMatchingItems (str)(value)=>
-// setProp
-// mergeProp
-// setColls
-// mergeColls
-// removeColls
-// setCollection
-// setCollectionProp
-// setCollectionItem
-// setCollectionItemProp
-// mergeCollection
-// mergeCollectionProp
-// mergeCollectionItem
-// mergeCollectionItemProp
-// removeCollection
-// removeCollectionProp
-// removeCollectionItem
-// removeCollectionItemProp
-// setItemsMatchingId
-// mergeItemsMatchingId
-// removeItemsWithMatchingId
-// const t0 = {id:'t0',val:'0'};
-// const t01 = {id:'t0',val:'01'};
-// const t1 = {id:'t1',val:'1'};
-// const tColl={tColl:{t0}};
+initialState.userTokens['0'].value = process.env.REACT_APP_GITHUB_TOKEN;
+initialState.analysisMods = {repo0:{id:'repo0',devcost:'80',changetime:'60'}};
+
 const tapUpdater = updater=>pipe(plog('prevState'),updater,plog('nextState'));
-// const tapUpdater = identity;
-// const store = createStore((state=initialState,{updater=identity})=>updater(state));
 const store = createStore((state,{updater=identity})=>tapUpdater(updater)(state),initialState);
 const store$ = from$(store[Symbol.observable]()).remember();//.startWith(initialState);
 // addDebugListener()(store$);
@@ -109,9 +80,9 @@ const assignToStateX = data=>{
 // assumes collection items will be added and removed
 
 export const [
-  repos$, repoNodes$, repoNodeOutEdges$, userTokens$
+  repos$, repoNodes$, repoNodeOutEdges$, userTokens$, analysisMods$,
 ] = [
-  'repos','repoNodes','repoNodeOutEdges','userTokens'
+  'repos','repoNodes','repoNodeOutEdges','userTokens','analysisMods'
 ].map(name=>pipe(
   map(s=>s[name]),
   filterChangedItems(),
@@ -123,13 +94,13 @@ export const to_repo_devcost$ = setStateX('repos.prop.devcost');
 export const to_repo_changetime$ = setStateX('repos.prop.changetime');
 export const to_repo_url$ = setStateX('repos.prop.url');
 
+export const analysisMods_by_repoid$ = analysisMods$;
+export const to_analysisMods_devcost = setStateX('analysisMods.prop.devcost')
+export const to_analysisMods_changetime = setStateX('analysisMods.prop.changetime')
 
 
 // files/directory nodes
 export const to_repoNodes$ = setStateX('repoNodes');
-export const repoNodes_costPerChange$ = pipe(map(mapv('costPerChange')),remember)(repoNodes$);
-export const repoNodes_userImpact$ = pipe(map(mapv('userImpact')),remember)(repoNodes$);
-export const repoNodes_path$ = pipe(map(mapv('path')),remember)(repoNodes$);
 
 
 // user github token
@@ -138,17 +109,34 @@ export const to_userToken$ = setStateX('userTokens.0.value');
 
 
 // analyses
+export const codeAnalysesRaw$ = pipe(
+  fold((prevAnalyses,repoNodes)=>{
+    let changes = 0;
+    const analyses = mo((n,id)=>{
+      if(prevAnalyses[id]){return prevAnalyses[id];}
+      changes++;
+      return {id,...analyse(n.path,n.code)};
+    })(repoNodes);
+    return changes===0 ? prevAnalyses : analyses;
+  },{}),
+  drop(1),
+  dropRepeats,
+  remember,
+)(repoNodes$);
+
 export const nodeAnalyses$ = pipe(
-  ()=>combine$(repoNodes$,repos$),
-  map(([repoNodes,repos])=>{
+  ()=>analysisMods_by_repoid$,
+  sampleCombine(repoNodes$,codeAnalysesRaw$),
+  fold((prevAnalyses,[mods,repoNodes,analyses])=>{
     const repoData = {costPerChangeMax:0,costPerChangeMin:Infinity};
     let minKey,maxKey;
     return ro((acc,node)=>{
       if(!node.code){return;}
-      repoData.devcost = repos[node.repoid].devcost;
-      repoData.changetime = repos[node.repoid].devcost;
-      const {analysis,code} = analyse(node.path,node.code);
+      repoData.devcost = mods[node.repoid].devcost;
+      repoData.changetime = mods[node.repoid].changetime;
+      const {analysis, code} = analyses[node.id];
       const n = {...node,code};
+
       mapv((v,k)=>{
         if(!isNumber(v)){return;}
         minKey = `${k}Min`;
@@ -166,18 +154,15 @@ export const nodeAnalyses$ = pipe(
       if(repoData.costPerChangeMax<n.costPerChange){repoData.costPerChangeMax=n.costPerChange;}
       acc[n.id] = Object.assign(n,repoData,{id:n.id,repoid:n.repoid});
     })(repoNodes);
-  }),
-  filterChangedItems(),
+  },{}),
+  drop(1),
+  dropRepeats,
   remember,
 )();
 
 
 // joins
 // export const repos_by_repoNode_id$ = store$
-// // why didn't it work to use combine$ or combineWith?  Why directly from the store$?
-// .map(({repoNodes,repos})=>mapv(n=>repos[n.repoid])(repoNodes));
-// export const repos_by_repoNode_id$ = combineArray$(repos$,repoNodes$).map(([r,nodes])=>mapv(n=>r[n.repoid])(nodes));
-// export const repos_by_repoNode_id$ = combine$(repos$,repoNodes$).map(([r,nodes])=>mapv(n=>r[n.repoid])(nodes));
 export const repos_by_repoNode_id$ = pipe(
   ()=>combine$(repos$,repoNodes$),
   map(([r,nodes])=>mapv(n=>r[n.repoid])(nodes)),
@@ -213,7 +198,9 @@ export const repoNodeOutEdges_by_repoid$ = pipe(
 )(repoNodeOutEdges$);
 
 export const d3TreeStructure_by_repoid$ = pipe(
-  ()=>combine$(repoNodeOutEdges$,repoNodes$),
+  ()=>repoNodeOutEdges$,
+  filterChangedItems(),
+  sampleCombine(repoNodes$),
   map(([repoNodeOutEdges,repoNodes])=>{
     const rootNodes = {...repoNodes};
     const adjList = mo((outEdgeObj,nodeKey)=>outEdgeObj.edges.map((edgeKey)=>{
