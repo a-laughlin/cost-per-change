@@ -1,6 +1,6 @@
 import * as xsfp from './xstream-fp.js';
 import {
-  pipe,isObservable,isArray,isPromise,isFunction,isPlainObject,mo,ma, unzip, ifElse,stubTrue,cond
+  pipe,isObservable,isArray,isPromise,isFunction,isPlainObject,mo,ma, unzip, ife,stubTrue,cond
 } from './utils.js';
 import {setObservableConfig,shallowEquals} from 'recompose';
 import xstreamConfig from 'recompose/xstreamObservableConfig';
@@ -64,7 +64,7 @@ toArray
 } = xsfp;
 
 export const ensureObservable = arg=>isObservable(arg)?arg:of$(arg);
-export const flattenDeep = flatMapLatest(x=>(isObservable(x)?flattenDeep:of$)(x));
+export const flattenDeep = flatMapLatest(ife(isObservable,flattenDeep,of$));
 const noop=()=>{};
 const identity=x=>x;
 export const operatorFactory = ({
