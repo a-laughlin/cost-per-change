@@ -32,7 +32,6 @@ export const get$ = cond(
   [isFunction, fn=>props=>get$(fn(props))(props)],
   [isPromise, prom=>props=>fromPromise$(prom)],
   [isObjectLike, obj=>target=>{
-    console.log(`get$`, get$);
     const mapped = mo(v=>get$(v)(target))(obj);
     const [keys,vals$] = unzip(Object.entries(mapped));
     return combine$(...vals$).map(vals=>Object.assign(zipObject(keys,vals),target));
@@ -216,7 +215,6 @@ export const repoNodeOutEdges_by_repoid$ = pipe(
 export const d3TreeStructure_by_repoid$ = pipe(
   ()=>combine$(repoNodeOutEdges$,repoNodes$),
   map(([repoNodeOutEdges,repoNodes])=>{
-    console.log(`treeStructure`,repoNodeOutEdges,repoNodes);
     const rootNodes = {...repoNodes};
     const adjList = mo((outEdgeObj,nodeKey)=>outEdgeObj.edges.map((edgeKey)=>{
       delete rootNodes[edgeKey];
@@ -226,7 +224,6 @@ export const d3TreeStructure_by_repoid$ = pipe(
       // map nodes to tree object with parent, children, height, depth properties
       acc[rootNode.repoid] = hierarchy(rootNode,n=>adjList[n.id]);
     })(rootNodes);
-    console.log(`treeStructure result`, result);
     return result;
   }),
   remember,
