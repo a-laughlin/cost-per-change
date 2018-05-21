@@ -62,7 +62,18 @@ export const parseStyleString = (()=>{
         ?`#${num}`
         :`${num}${unit}`
   );
-  const parser = (s,[_,prefix,num,unit]=s.match(styleMatcher))=>prefixes[prefix](num,unit);
+  let parser = (s,[_,prefix,num,unit]=s.match(styleMatcher))=>prefixes[prefix](num,unit);
+  if(!isProductionEnv()) {
+    parser = s => {
+      try{
+        const [_,prefix,num,unit]=s.match(styleMatcher);
+        return prefixes[prefix](num,unit);
+      } catch(e){
+        console.warn(`invalid style: "${s}"`);
+        return {};
+      }
+    };
+  }
 
   const styleSeparator = ' ';
   const getCachedOrParseThenCache = pipe(
@@ -162,9 +173,8 @@ export const parseStyleString = (()=>{
     lJCSE:{justifyContent:'space-evenly'},
 
     // borders
-    bSolid:{borderStyle:'solid'},
-    bDashed:{borderStyle:'dashed'},
-    bRound:{borderRadius:'0.5em'},
+    bS:{borderStyle:'solid'},
+    bD:{borderStyle:'dashed'},
     // text
     tSerif:{fontFamily: `serif`},
     tCapital:{textTransform:'capital'},
@@ -376,6 +386,8 @@ export const stylRemove = mergeableHocFactory({
   onArgs:mergeInputs,
   onComponent:(merged,props)=>sconfig.remove(merged)(props)
 });
+export const pstyl = (...inputs)=>sconfig.merge(mergeInputs(...inputs));;
+// export const pstyl = compose(sconfig.merge,mergeInputs);
 // export const withListStyles = mergeableHocFactory({
 //   onArgs:pipe(mergeInputs,rejectInvalidListStyles),
 //   onComponent:globalConfig.propsPassed
@@ -386,8 +398,8 @@ export const stylRemove = mergeableHocFactory({
  */
 export const [v,h,g] = ['lVertical','lHorizontal','lGrid'].map(s=>styl(listStyles[s],'tSans'));
 export const [vi,hi,gi] = ['lVerticalItem','lHorizontalItem','lGridItem'].map(s=>styl(listStyles[s],'tSans'));
-export const [stylvi,stylhi,stylgi] = ['lVerticalItem','lHorizontalItem','lGridItem'].map(s=>styl(listStyles[s],'tSans'));
+// export const [stylvi,stylhi,stylgi] = ['lVerticalItem','lHorizontalItem','lGridItem'].map(s=>styl(listStyles[s],'tSans'));
 // wireframe item shorthands
-export const [wfvi,wfhi,wfgi] = [
-  ['BLUE','lVerticalItem'],['RED','lHorizontalItem'],['DARKGREEN','lGridItem']
-].map(([color,itmDir])=>styl(`bc${color},${itmDir},tc333,b1x,bDashed`));
+// export const [wfvi,wfhi,wfgi] = [
+//   ['BLUE','lVerticalItem'],['RED','lHorizontalItem'],['DARKGREEN','lGridItem']
+// ].map(([color,itmDir])=>styl(`bc${color} ${itmDir} tc333 b1x bD`));

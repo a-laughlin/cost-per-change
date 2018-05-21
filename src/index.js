@@ -60,7 +60,7 @@ const scaleRed = getRedGenerator(0,4);
 
 
 // Random Util Element
-const QMark = Span(c('?'),h('crP peN usN t.4 lh1.3 tcC pl.3 pr.3 b1x bSolid brad50% bcC ml.5 mr.5'));
+const QMark = Span(c('?'),h('crP peN usN t.4 lh1.3 tcC pl.3 pr.3 b1x bS brad50% bcC ml.5 mr.5'));
 
 
 
@@ -105,7 +105,7 @@ const CopyRepoButton = Button(c('Copy'), pipeClicks(get('data'),to_repo_copy),st
 const RepoHeader = Div(
   c([RepoUrlLabel, RepoUrlHelpTrigger, RepoUrlContainer, RemRepoButton, CopyRepoButton]
     .map(hi('first:ml.5 mr.5 nth2mr0 mt.5'))),
-  h('w100% b0 bt1x bSolid bcD brad10x')
+  h('w100% b0 bt1x bS bcD brad10x')
 );
 
 
