@@ -47,9 +47,8 @@ const clog = name=>pipe(plog(name),stubNull);
 // utils
 const setProp = str=>(...Components)=>pipe(({[str]:data})=>({data}),toItemProps(...Components),flatten);
 export const setOwnProps = fn=>(...Components)=>pipe(fn,toItemProps(...Components),flatten);
-const idx$ = (stream$,...fns)=>({data})=>stream$.map(pipe(get(data),...fns));
 
-const idxMap$ = idxMapFactory();
+const idx = idxMapFactory();
 const pass_id = setOwnProps(pget({data:'id'}));
 const pass_repoid = setOwnProps(pget({data:'repoid'}));
 const cpipe = (...Components)=>(...fns)=>converge(Components.map(C=>pipe(...fns)(C)));
@@ -93,7 +92,7 @@ const TokenArea = Div(
 
 // Repo Header
 const RepoUrlInput = TextInput(
-  hget$({defaultValue:idxMap$(repos$,'url')}),
+  hget$({defaultValue:idx(repos$,'url')}),
   pipeChanges( pget({value:'target.value',data:'data'}),to_repo_url),
   h('t1em w100% b0 bb1x')
 );
@@ -104,10 +103,8 @@ const RepoUrlLabel = Label(c('GitHub Path'));
 const RemRepoButton = Button(c('Remove'), pipeClicks(get('data'),to_repo_remove),styl('t.8 lh1.1 p.2'));
 const CopyRepoButton = Button(c('Copy'), pipeClicks(get('data'),to_repo_copy),styl('t.8 lh1.1 p.2'));
 const RepoHeader = Div(
-  c(
-    cpipe(RepoUrlLabel, RepoUrlHelpTrigger, RepoUrlContainer, RemRepoButton, CopyRepoButton)(
-    hi('first:ml.5 mr.5 nth2mr0 mt.5'))
-  ),
+  c([RepoUrlLabel, RepoUrlHelpTrigger, RepoUrlContainer, RemRepoButton, CopyRepoButton]
+    .map(hi('first:ml.5 mr.5 nth2mr0 mt.5'))),
   h('w100% b0 bt1x bSolid bcD brad10x')
 );
 
@@ -136,8 +133,8 @@ const Tree = ({node,parentNode,id,analyses})=>(
 
 const TreeSVG = Svg(
   c(pipe(
-    idxMap$(repos$,'id'), dropRepeats, map(data=>({data})),
-    idxMap$(d3TreeStructure_by_repoid$,nodeAnalyses_by_repoid$,(treeObj, analyses)=>{
+    idx(repos$,'id'), dropRepeats, map(data=>({data})),
+    idx(d3TreeStructure_by_repoid$,nodeAnalyses_by_repoid$,(treeObj, analyses)=>{
       const w=290, h=290;
       const root = Object.assign(d3.tree().size([h,w])(treeObj),{x:(h-0.1*h)/2,y:0.1*h});
       return toItemProps(Tree)({node:root,parentNode:root,analyses,id:root.data.repoid});
@@ -178,11 +175,11 @@ const PathHeader = Span(c('Path'));
 
 // Metrics Grid Cells
 
-const GridCellCostPerChange = Span(c(idxMap$(nodeAnalyses$,get(`costPerChange`),round)));
-const GridCellUserImpact = Span(c(idxMap$(nodeAnalyses$,get(`userImpact`),round)));
-const GridCellPath = Span(c(idxMap$(repoNodes$,get(`path`),p=>p.replace(/^.+\//g,''))));
+const GridCellCostPerChange = Span(c(idx(nodeAnalyses$,get(`costPerChange`),round)));
+const GridCellUserImpact = Span(c(idx(nodeAnalyses$,get(`userImpact`),round)));
+const GridCellPath = Span(c(idx(repoNodes$,get(`path`),p=>p.replace(/^.+\//g,''))));
 const GridCellRulesImpact = Div(c(pipe(
-  idxMap$(nodeAnalyses$), dropRepeats, map((node)=>{
+  idx(nodeAnalyses$), dropRepeats, map((node)=>{
     const styles = ([// should generate these based on selected rules, but select/deselect nodes isn't implemented yet
       {backgroundColor:reds[4],width:(node.maintainability/node.maintainabilityMax)*100},
       {backgroundColor:reds[3],width:(node.effort/node.effortMax)*100},
@@ -199,7 +196,7 @@ const MetricsBody = Div(
   c([PathHeader, RulesImpact, CostPerChange, UserImpact]
     .map(gi('mb.3 nthn-+4mb1','nthn4-3w19%_mr1% nthn4-2w44%_mr1% nthn4-1w19%_mr1% nthn4w14%_mr1%')),
     pipe(
-      idxMap$(nodeAnalyses_by_repoid$),
+      idx(nodeAnalyses_by_repoid$),
       dropRepeats,
       map(pipe(
         sortBy('costPerChange'),
@@ -219,7 +216,7 @@ const MetricsBody = Div(
 
 // Dev Cost and Time Per Change Adjustments
 const DevCostPerHour = Input(
-  hget$({defaultValue:idxMap$(repos$,'devcost')}),
+  hget$({defaultValue:idx(repos$,'devcost')}),
   pipeChanges(from_target_value,to_repo_devcost$),
   h('w3 t0.8')
 );
@@ -228,7 +225,7 @@ const dcHelp = Span(c(QMark),withModal(dcText));
 const dcLabel = Label(c('Dev Hourly Cost'),h('t0.8'));
 
 const TimePerChange = TextInput(
-  hget$({defaultValue:idxMap$(repos$,'changetime')}),
+  hget$({defaultValue:idx(repos$,'changetime')}),
   pipeChanges(from_target_value,to_repo_changetime$),
   h('w3 t0.8')
 );
