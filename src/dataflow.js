@@ -1,15 +1,16 @@
 import {createStore} from 'redux';
+import {hierarchy} from 'd3';
 import {setObservableConfig,createEventHandler,mapPropsStream,componentFromStream,shallowEqual} from 'recompose';
 import {
   pipe,compose,mapv,plog,get as _get,identity,pget,pgetv,ensureArray,set,isObservable,assignAll,
   mapvToArr,isFunction,ensureFunction,groupByKey,ife,isString,cond,stubTrue,transformToObj,
   omitv,matches,fltrvToObj,isPlainObject,isNumber,ro,unzip,zipObject,mo,isArray,fa,pick,isObjectLike,
-  every,not,isUndefOrNull,isPromise,or
+  every,not,isUndefOrNull,isPromise,or,partition,ma,spread
 } from './lib/utils';
 import {of$,from$,combine$,map,debug,debounce,from,combineWith,flatten,flattenConcurrently,flattenSequentially,addListener,
   addDebugListener,setDebugListener,dropRepeats,flatMapLatest,flatMap,sampleCombine,getDebugListener,
   removeListener,getListener,subscribe,fold,drop,periodic$,filterChangedItems,takeWhenPropChanged,filter,
-  ensureObservable,combineArray$,remember,flattenDeep,fromPromise$
+  ensureObservable,remember,flattenDeep,fromPromise$
 } from './lib/utils$.js';
 import {analyse} from './analyse';
 import {loadRepoGraph} from './api'
@@ -40,6 +41,15 @@ export const get$ = cond(
 );
 export const hget$ = compose(mapPropsStream,flatMap,get$);
 
+export const idxMapFactory = (dataKey='data')=>(...streamsAndArgs)=>props$=>{
+  const [streams$,fns]=partition(isObservable)(streamsAndArgs);
+  return combine$(ensureObservable(props$),...streams$).map(
+    pipe(
+      ([props,...streams])=>streams.map(s=>s[props[dataKey]]),
+      spread(pipe(...fns.map(f=>pget(f)))),
+    )
+  );
+};
 
 export const from_target_value = pget({value:'target.value',data:'data'});
 
@@ -203,6 +213,24 @@ export const repoNodeOutEdges_by_repoid$ = pipe(
   remember,
 )(repoNodeOutEdges$);
 
+export const d3TreeStructure_by_repoid$ = pipe(
+  ()=>combine$(repoNodeOutEdges$,repoNodes$),
+  map(([repoNodeOutEdges,repoNodes])=>{
+    console.log(`treeStructure`,repoNodeOutEdges,repoNodes);
+    const rootNodes = {...repoNodes};
+    const adjList = mo((outEdgeObj,nodeKey)=>outEdgeObj.edges.map((edgeKey)=>{
+      delete rootNodes[edgeKey];
+      return repoNodes[edgeKey];
+    }))(repoNodeOutEdges);
+    const result = ro((acc,rootNode,k)=>{
+      // map nodes to tree object with parent, children, height, depth properties
+      acc[rootNode.repoid] = hierarchy(rootNode,n=>adjList[n.id]);
+    })(rootNodes);
+    console.log(`treeStructure result`, result);
+    return result;
+  }),
+  remember,
+)();
 
 
 
