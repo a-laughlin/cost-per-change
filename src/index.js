@@ -22,7 +22,7 @@ import {repos$,to_repo_devcost$, to_repo_changetime$,
   from_target_value,repoNodes_by_repoid$,mapProp,repoNodes$,repos_id$,repoNodeOutEdges$,
   userToken$, to_userToken$,to_repo_copy,to_repo_remove,to_repo_url,repoNodeOutEdges_by_repoid$,
   repoNodes_costPerChange$,repoNodes_userImpact$,repos_by_repoNode_id$,pipeCollection,
-  repoNodes_path$,nodeAnalyses$,nodeAnalyses_by_repoid$,hpcombine$,pcombine$
+  repoNodes_path$,nodeAnalyses$,nodeAnalyses_by_repoid$,get$,hget$
 } from './dataflow.js';
 
 import {Circle,Text,Div,Span,Img,H1,Input,A,Label,Svg,TextInput,Button,Header,Pre,P,toItemProps,
@@ -71,11 +71,11 @@ const QMark = Span(withItems('?'),
 // User / Info Section
 const TokenTextInput = TextInput(
   pipeChanges(pget({value:'target.value',data:'data'}),to_userToken$),
-  // why, if I reverse these 2 hpcombines, or move the style one to the parent, does the style start
+  // why, if I reverse these 2 hget$s, or move the style one to the parent, does the style start
   // lagging one action behind?  keeping them in this order, or setting them both on the same
-  // hpcombine fixes the issue. However, contextual styles control belongs to containers
-  hpcombine$({defaultValue:userToken$}),
-  hpcombine$({style:userToken$.map(ifenx(len(40),{},{border:'1px solid red'}))}),
+  // hget$ fixes the issue. However, contextual styles control belongs to containers
+  hget$({defaultValue:userToken$}),
+  hget$({style:userToken$.map(ifenx(len(40),{},{border:'1px solid red'}))}),
   h('w40 b0 bb1x bcD t0.7')
 );
 const TokenTextContainer = Div(withItems(TokenTextInput));
@@ -96,7 +96,7 @@ const TokenArea = Div(
 
 // Repo Header
 const RepoUrlInput = TextInput(
-  hpcombine$({defaultValue:({data:repoid})=>`repos[${repoid}].url`}),
+  hget$({defaultValue:({data:repoid})=>`repos[${repoid}].url`}),
   pipeChanges( pget({value:'target.value',data:'data'}),to_repo_url),
   h('t1em w100% b0 bb1x')
 );
@@ -138,14 +138,12 @@ const TreeComponent = ({node,parentNode,id,getPath,getColor})=>(
 const TreeSVG = Svg(
   withItems(
     pipe(
-      ({data:repoid})=>repos$.map(get(`${repoid}.id`)),
-      map(plog(`debug before`)),
+      idx$(repos$),
+      map(get(`id`)),
       dropRepeats,
-      map(plog(`debug after`)),
       sampleCombine( repoNodeOutEdges_by_repoid$, repoNodes_by_repoid$, nodeAnalyses_by_repoid$),
       map(([repoid,eidx,nidx, aidx])=>{
         const [repoNodeOutEdges,repoNodes, analyses]=ma(get(repoid))([eidx,nidx, aidx]);
-        console.log(`analyses`, analyses);
         const rootNodes = {...repoNodes};
         const adjList = mx((outEdgeObj,nodeKey)=>outEdgeObj.edges.map((edgeKey)=>{
           delete rootNodes[edgeKey];
@@ -258,7 +256,7 @@ const MetricsBody = Div(
 
 // Dev Cost and Time Per Change Adjustments
 const DevCostPerHour = Input(
-  hpcombine$({defaultValue:({data:repoid})=>`repos[${repoid}].devcost`}),
+  hget$({defaultValue:({data:repoid})=>`repos[${repoid}].devcost`}),
   pipeChanges(from_target_value,to_repo_devcost$),
   h('w3 t0.8')
 );
@@ -267,7 +265,7 @@ const dcHelp = Span(withItems(QMark),withModal(dcText));
 const dcLabel = Label(withItems('Dev Hourly Cost'),h('t0.8'));
 
 const TimePerChange = TextInput(
-  hpcombine$({defaultValue:({data:repoid})=>`repos[${repoid}].changetime`}),
+  hget$({defaultValue:({data:repoid})=>`repos[${repoid}].changetime`}),
   pipeChanges(from_target_value,to_repo_changetime$),
   h('w3 t0.8')
 );

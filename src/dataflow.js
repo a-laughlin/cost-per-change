@@ -38,22 +38,7 @@ export const get$ = cond(
   }],
   [stubTrue,x=>props=>ensureObservable(x)],
 );
-export const pcombine$ = get$;
-export const hpcombine$ = compose(mapPropsStream,flatMap,get$);
-export const hget$ = hpcombine$
-// export const hpcombine$ = arg=>mapPropsStream(get$(arg));//compose(mapPropsStream,flatMap,get$);
-// export const pcombine$ = cond(
-//   [isString, (str,target$=store$)=>props=>map(get(str))(target$)],
-//   [isArray, arr=>props=>combine$(of$(props),...arr.map(v=>pcombine$(v)(props)))],
-//   [isFunction, fn=>props=>pcombine$(fn(props))(props)],
-//   [isPlainObject, obj=>props=>{
-//     const mapped = mo(v=>pcombine$(v)(props))(obj);
-//     const [keys,vals$] = unzip(Object.entries(mapped));
-//     return combine$(...vals$).map(vals=>Object.assign(zipObject(keys,vals),props));
-//   }],
-//   [stubTrue,arg=>props=>ensureObservable(arg)],
-// );
-// export const hpcombine$ = compose(mapPropsStream,flatMap,pcombine$);
+export const hget$ = compose(mapPropsStream,flatMap,get$);
 
 
 export const from_target_value = pget({value:'target.value',data:'data'});
