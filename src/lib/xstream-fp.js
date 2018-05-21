@@ -21,6 +21,8 @@ import ethrottle from 'xstream/extra/throttle';
 export const xs = xstream;
 export const of$ = xs.of.bind(xs);
 export const from$ = xs.from.bind(xs);
+export const fromArray$ = xs.fromArray.bind(xs);
+export const fromPromise$ = xs.fromPromise.bind(xs);
 export const create$ = xs.create.bind(xs);
 export const never$ = xs.never.bind(xs);
 export const empty$ = xs.empty.bind(xs);

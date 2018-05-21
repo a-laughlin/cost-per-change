@@ -1,14 +1,15 @@
 import {createStore} from 'redux';
 import {setObservableConfig,createEventHandler,mapPropsStream,componentFromStream,shallowEqual} from 'recompose';
 import {
-  pipe,compose,mapv,plog,get,identity,pget,pgetv,ensureArray,set,isObservable,assignAll,
-  mapvToArr,isFunction,ensureFunction,groupByKey,ifElse,isString,cond,stubTrue,transformToObj,
-  omitv,matches,fltrvToObj,isPlainObject,isNumber,ro,unzip,zipObject,mo,isArray
+  pipe,compose,mapv,plog,get as _get,identity,pget,pgetv,ensureArray,set,isObservable,assignAll,
+  mapvToArr,isFunction,ensureFunction,groupByKey,ife,isString,cond,stubTrue,transformToObj,
+  omitv,matches,fltrvToObj,isPlainObject,isNumber,ro,unzip,zipObject,mo,isArray,fa,pick,isObjectLike,
+  every,not,isUndefOrNull,isPromise,or
 } from './lib/utils';
 import {of$,from$,combine$,map,debug,debounce,from,combineWith,flatten,flattenConcurrently,flattenSequentially,addListener,
   addDebugListener,setDebugListener,dropRepeats,flatMapLatest,flatMap,sampleCombine,getDebugListener,
   removeListener,getListener,subscribe,fold,drop,periodic$,filterChangedItems,takeWhenPropChanged,filter,
-  ensureObservable,combineArray$,remember,
+  ensureObservable,combineArray$,remember,flattenDeep,fromPromise$
 } from './lib/utils$.js';
 import {analyse} from './analyse';
 import {loadRepoGraph} from './api'
@@ -22,19 +23,37 @@ export const simpleStore = (initialState={})=>{
   const dispatch = fn=>handler({type:'fn',updater:fn});// mock redux dispatch for compatibility
   return {store$,dispatch};
 }
-
-export const pcombine$ = cond(
-  [isString, (str,target$=store$)=>props=>map(get(str))(target$)],
-  [isArray, arr=>props=>combine$(of$(props),...arr.map(v=>pcombine$(v)(props)))],
-  [isFunction, fn=>props=>pcombine$(fn(props))(props)],
-  [isPlainObject, obj=>props=>{
-    const mapped = mo(v=>pcombine$(v)(props))(obj);
+export const get$ = cond(
+  // ordering based on lodash source code, for minimum checks
+  [or(isString,isNumber),s=>v=>isObservable(v)?map(_get(s))(v):of$(_get(s)(v))],
+  [isObservable,obs$=>props=>obs$],
+  [isArray,arr=>props=>combine$(of$(props),...arr.map(v=>get$(v)(props)))],
+  [isFunction, fn=>props=>get$(fn(props))(props)],
+  [isPromise, prom=>props=>fromPromise$(prom)],
+  [isObjectLike, obj=>target=>{
+    console.log(`get$`, get$);
+    const mapped = mo(v=>get$(v)(target))(obj);
     const [keys,vals$] = unzip(Object.entries(mapped));
-    return combine$(...vals$).map(vals=>Object.assign(zipObject(keys,vals),props));
+    return combine$(...vals$).map(vals=>Object.assign(zipObject(keys,vals),target));
   }],
-  [stubTrue,arg=>props=>ensureObservable(arg)],
+  [stubTrue,x=>props=>ensureObservable(x)],
 );
-export const hpcombine$ = compose(mapPropsStream,flatMap,pcombine$);
+export const pcombine$ = get$;
+export const hpcombine$ = compose(mapPropsStream,flatMap,get$);
+export const hget$ = hpcombine$
+// export const hpcombine$ = arg=>mapPropsStream(get$(arg));//compose(mapPropsStream,flatMap,get$);
+// export const pcombine$ = cond(
+//   [isString, (str,target$=store$)=>props=>map(get(str))(target$)],
+//   [isArray, arr=>props=>combine$(of$(props),...arr.map(v=>pcombine$(v)(props)))],
+//   [isFunction, fn=>props=>pcombine$(fn(props))(props)],
+//   [isPlainObject, obj=>props=>{
+//     const mapped = mo(v=>pcombine$(v)(props))(obj);
+//     const [keys,vals$] = unzip(Object.entries(mapped));
+//     return combine$(...vals$).map(vals=>Object.assign(zipObject(keys,vals),props));
+//   }],
+//   [stubTrue,arg=>props=>ensureObservable(arg)],
+// );
+// export const hpcombine$ = compose(mapPropsStream,flatMap,pcombine$);
 
 
 export const from_target_value = pget({value:'target.value',data:'data'});
@@ -120,7 +139,7 @@ export const repoNodes_path$ = pipe(map(mapv('path')),remember)(repoNodes$);
 
 
 // user github token
-export const userToken$ = pipe(map(get('0.value')),dropRepeats,remember)(userTokens$);
+export const userToken$ = pipe(map(_get('0.value')),dropRepeats,remember)(userTokens$);
 export const to_userToken$ = setStateX('userTokens.0.value');
 
 
