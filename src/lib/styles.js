@@ -5,11 +5,51 @@ import Styletron from 'styletron-client';
 import {injectStyle} from 'styletron-utils';
 import {createElement,Children,cloneElement} from 'react';
 import {split,ifElse,argsToArray,transform,isPlainObject,rangeStep,identity,isString,isFunction,
-  pipe,mergeAll,isProductionEnv,mapv,plog,is,omitv,union} from './utils';
+  pipe,mergeAll,isProductionEnv,mapv,plog,is,omitv,union,difference,partition,ma} from './utils';
 import { isComponentString, isComponent, mergeableHocFactory } from './hoc-utils'
 // convert to get both val and key
 /* eslint-disable no-unused-vars */
-/* eslint-enable no-unused-vars */
+
+
+const listStyles={};
+listStyles.lHorizontal = {
+  listStyleType:'none',
+  display:'flex',
+  flexDirection:'row',
+  alignItems:'center',
+  alignContent:'flex-start',
+  justifyContent:'flex-start',
+  flexWrap:'nowrap',
+};
+listStyles.lVertical = {
+  ...listStyles.lHorizontal,
+  flexDirection:'column',
+  alignItems:'flex-start',
+};
+listStyles.lGrid = {
+  ...listStyles.lHorizontal,
+  flexWrap:'wrap',
+  alignItems:'flex-start',
+  justifyContent:'space-evenly',
+};
+
+listStyles.lHorizontalItem = {
+  listStyleType:'none',
+  flexGrow:'0',
+  flexShrink:'1',
+  flexBasis:'auto',
+  width:'auto',
+  height:'auto',
+};
+listStyles.lVerticalItem = {
+  ...listStyles.lHorizontalItem,
+  flexShrink:'0',
+};
+listStyles.lGridItem = {
+  ...listStyles.lHorizontalItem,
+};
+
+
 
 export const parseStyleString = (()=>{
   const styleMatcher = /^([a-z]+)([A-Z0-9.:#\+\-]+)(.*)$/;
@@ -216,42 +256,7 @@ export const parseStyleString = (()=>{
     ':hover':cache.tUnderline,
     ':active':cache.tUnderline,
   };
-  cache.lHorizontal = {
-    listStyleType:'none',
-    display:'flex',
-    flexDirection:'row',
-    alignItems:'center',
-    alignContent:'flex-start',
-    justifyContent:'flex-start',
-    flexWrap:'nowrap',
-  };
-  cache.lVertical = {
-    ...cache.lHorizontal,
-    flexDirection:'column',
-    alignItems:'flex-start',
-  };
-  cache.lGrid = {
-    ...cache.lHorizontal,
-    flexWrap:'wrap',
-    alignItems:'flex-start',
-    justifyContent:'space-evenly',
-  };
 
-  cache.lHorizontalItem = {
-    listStyleType:'none',
-    flexGrow:'0',
-    flexShrink:'1',
-    flexBasis:'auto',
-    width:'auto',
-    height:'auto',
-  };
-  cache.lVerticalItem = {
-    ...cache.lHorizontalItem,
-    flexShrink:'0',
-  };
-  cache.lGridItem = {
-    ...cache.lHorizontalItem,
-  };
   return getCachedOrParseThenCache;
 })();
 // check cached combos, check constants,run getPrefix:getSuffix
@@ -295,7 +300,8 @@ const rejectInvalidListItemStyles = validityTest('listItems',{});
 /**
  * withStyles && withItemContextStyles
  */
-
+// move list styles out
+// separate cache from parser
 // inline adapter
 export const onPropsPassedInline = (merged,props)=>({...props,style:{...props.style,...merged}});
 export const onItemPropsPassedInline = (merged,props)=>{
@@ -306,47 +312,82 @@ export const onItemPropsPassedInline = (merged,props)=>{
 };
 
 // styletron adapter
-const styletron = new Styletron();
-export const styleObjectToClasses = stylesObj=>injectStyle(styletron, stylesObj);
 // BUG the class merge doesn't remove classes,
 // so conditional styles with a second hoc wrapping will only add more styles, not be conditional
 // const classUnion = (c1,c2)=>union((c1+c2).split(' '));
-export const onPropsPassedStyletron = (merged,props)=>({...props,className:`${props.className||''} ${styleObjectToClasses(merged)||''}`});
-export const onItemPropsPassedStyletron = (merged,props)=>{
-  if(!props.children||props.children.length===0){return props;}
-  return {...props,children:Children.map(props.children,(elem)=>(
-    !elem ? null : cloneElement(elem, {...elem.props,className:`${elem.props.className||''} ${styleObjectToClasses(merged)||''}`})
-  ))};
+// cache class names classNameToStyleObjMap
+// when replacing, construct a new object from the classNamesMap
+const shortcutObjCache={};
+const shortcutToStyleNamesCache={};
+const getStyletronConfig=()=>{
+  const prefix = '_';
+  const styletron = new Styletron({prefix});
+  const propsMapper = fn=>obj=>props=>{
+    // console.log(`obj`, obj);
+    // console.log(`api.objToStyleKeys(obj)`, api.objToStyleKeys(obj));
+    return pipe(
+      props=>props.className||'',
+      split(' '),
+      partition(s=>s[0]===prefix),
+      ([styleTronClasses,otherClasses])=>[
+        ...otherClasses,
+        ...fn(api.objToStyleKeys(obj),styleTronClasses),
+      ].join(' '),
+      className=>({...props,className}),
+    )(props)
+  };
+  const api = {
+    // console.log(`styletron`, styletron);
+    // styletron.cache contains the current keys
+    objToStyleKeys:ma((v,k)=>injectStyle(styletron,{[k]:v})),
+    remove:propsMapper((newClasses,classes)=>difference(classes,newClasses)),
+    merge:propsMapper((newClasses,classes)=>union(classes,newClasses)),
+    set:propsMapper((newClasses,classes)=>newClasses),
+    custom:fn=>propsMapper(fn)({})
+  };
+  api.itemPropsPassed = (merged,props)=>{
+    if(!props.children||props.children.length===0){return props;}
+    return {...props,children:Children.map(props.children,(elem)=>(
+      !elem ? null : cloneElement(elem, {...elem.props,className:`${elem.props.className||''} ${injectStyle(merged)||''}`})
+    ))};
+  };
+  return api;
 };
 
 const normalizeStyles = ifElse(isString,parseStyleString,identity);
-const mergeStyles = pipe(argsToArray(identity),mapv(normalizeStyles),mergeAll);
 let globalConfig;
-globalConfig = {propsPassed:onPropsPassedInline,itemPropsPassed:onItemPropsPassedInline};
-globalConfig = {propsPassed:onPropsPassedStyletron,itemPropsPassed:onItemPropsPassedStyletron};
-export const withCondStyles = (stylesFn)=>BaseComponent=>props=>{
-  return createElement(BaseComponent,{...props,style:mergeStyles(stylesFn(props)||{})})
-};
-export const withStyles = mergeableHocFactory({
-  onArgsPassed:mergeStyles,
-  onPropsPassed:globalConfig.propsPassed
-});
-export const withListStyles = mergeableHocFactory({
-  onArgsPassed:pipe(mergeStyles,rejectInvalidListStyles),
-  onPropsPassed:globalConfig.propsPassed
-});
-export const withItemContextStyles = mergeableHocFactory({
-  onArgsPassed:pipe(mergeStyles,rejectInvalidListItemStyles),
-  onPropsPassed:globalConfig.itemPropsPassed
-});
 
+const mergeInputs = pipe(argsToArray(identity),mapv(normalizeStyles),mergeAll);
+const sconfig = getStyletronConfig();
+export const stylBase = fn=>(...input)=>BaseComponent=>props=>createElement(BaseComponent,fn(...input)(props));
+const stylCustom = stylBase(pipe(mergeInputs,sconfig.custom));
+const removeStyles = pipe(mergeInputs,sconfig.remove);
+// globalConfig = {propsPassed:onPropsPassedInline,itemPropsPassed:onItemPropsPassedInline};
+globalConfig = sconfig;
+export const styl = mergeableHocFactory({
+  onArgs:mergeInputs,
+  onComponent:(merged,props)=>sconfig.merge(merged)(props)
+});
+export const stylSet = mergeableHocFactory({
+  onArgs:mergeInputs,
+  onComponent:(merged,props)=>sconfig.set(merged)(props)
+});
+export const stylRemove = mergeableHocFactory({
+  onArgs:mergeInputs,
+  onComponent:(merged,props)=>sconfig.remove(merged)(props)
+});
+// export const withListStyles = mergeableHocFactory({
+//   onArgs:pipe(mergeInputs,rejectInvalidListStyles),
+//   onComponent:globalConfig.propsPassed
+// });
 
 /**
  * list style shorthands
  */
-export const [v,h,g] = ['lVertical','lHorizontal','lGrid'].map(s=>withStyles(s,'tSans'));
-export const [vi,hi,gi] = ['lVerticalItem','lHorizontalItem','lGridItem'].map(s=>withItemContextStyles(s,'tSans'));
+export const [v,h,g] = ['lVertical','lHorizontal','lGrid'].map(s=>styl(listStyles[s],'tSans'));
+export const [vi,hi,gi] = ['lVerticalItem','lHorizontalItem','lGridItem'].map(s=>styl(listStyles[s],'tSans'));
+export const [stylvi,stylhi,stylgi] = ['lVerticalItem','lHorizontalItem','lGridItem'].map(s=>styl(listStyles[s],'tSans'));
 // wireframe item shorthands
 export const [wfvi,wfhi,wfgi] = [
   ['BLUE','lVerticalItem'],['RED','lHorizontalItem'],['DARKGREEN','lGridItem']
-].map(([color,itmDir])=>withItemContextStyles(`bc${color},${itmDir},tc333,b1x,bDashed`));
+].map(([color,itmDir])=>styl(`bc${color},${itmDir},tc333,b1x,bDashed`));

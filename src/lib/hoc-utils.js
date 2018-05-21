@@ -116,10 +116,14 @@ export const withItemsHOCFactory = (function() {
 // hoc(component)(props)
 // hoc(args)(component)(props)
 // hoc(args)(args)(component)(props)
-export const mergeableHocFactory = ({onArgsPassed,onPropsPassed,_merged})=>(...args)=>(
+export const mergeableHocFactory = ({
+  onArgs = (_merged,args)=>({...(_merged||{}),...args}),
+  onComponent,
+  _merged
+}={})=>(...args)=>(
   isComponent(args[0])
-    ? props=>Elem(args[0],onPropsPassed(_merged,props))
-    : mergeableHocFactory({onArgsPassed,onPropsPassed,_merged:{...(_merged||{}),...onArgsPassed(...args)}})
+    ? props=>Elem(args[0],onComponent(_merged,props))
+    : mergeableHocFactory({onArgs,onComponent,_merged:onArgs(_merged,...args)})
 );
 
 

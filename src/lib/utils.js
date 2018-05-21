@@ -7,7 +7,7 @@ import {
   isInteger,isError,isNumber,isObjectLike,hasIn,has,isWeakMap, isWeakSet, isMap, isSet,isEmpty,
   isString, isPlainObject, isFunction, isNull,isUndefined,set,unset,curry,mergeAllWith as mergeAllWithFP,mergeAll as mergeAllFP,
   omitBy,rearg,rangeStep,assignAll as assignAllFP,assignAllWith as assignAllWithFP,ary as arity,
-  unary,sortBy,keyBy,kebabCase,size,partition,every,values,keys,zip,unzip,zipObject
+  unary,sortBy,keyBy,kebabCase,size,partition,every,values,keys,zip,unzip,zipObject,union,conforms
 } from 'lodash/fp';
 import {merge,mergeWith,set as _set,debounce as _debounce,memoize as _memoize} from 'lodash';
 import $$observable from 'symbol-observable';
@@ -21,7 +21,8 @@ export {
   findKey,uniqueId,findIndex,set,mergeWith,reject,concat,constant,flatMap,flattenDeep,omit,
   isInteger,isError,isNumber,isObjectLike,hasIn,has,isWeakMap, isWeakSet, isMap, isSet,isEmpty,
   isString, isPlainObject, isFunction, isNull,isUndefined,_set,unset,pickBy,curry,omitBy,sortBy,
-  rearg,rangeStep,over,kebabCase,size,partition,every,values,keys,zip,unzip,zipObject
+  rearg,rangeStep,over,kebabCase,size,partition,every,values,keys,zip,unzip,zipObject,difference,
+  union
 }
 
 
@@ -71,15 +72,16 @@ export const memoize = curry(rearg([1,0],_memoize),2);
 export const debounce = curry((wait,opts,fn)=>_debounce(fn,wait,opts),3);
 
 // logic
-const makeArrayWrapperOptional = fn=>(...m)=>m[0] && isArray(m[0][0]) ? fn(m[0]) : fn(m);
+export const makeArrayWrapperOptional = fn=>(...m)=>m[0] && isArray(m[0][0]) ? fn(m[0]) : fn(m);
 export const condNoExec = makeArrayWrapperOptional(
   matrix=>(...args)=>{for (let [pred,fn] of matrix){if(pred(...args)){return fn;}}}
 );
 export const cond = makeArrayWrapperOptional(
   matrix=>(...args)=>condNoExec(...(matrix))(...args)(...args)
 )
-export const ifElse = (predicate,ifTrue,ifFalse=identity)=>(...args)=>((predicate(...args) ? ifTrue : ifFalse)(...args));
-export const elseIf = (ifTrue,ifFalse)=>predicate=>ifElse(predicate,ifTrue,ifFalse);
+export const ifenx = (pred,T,F=identity)=>(...args)=>(pred(...args) ? T : F);
+export const ifElse = (pred,T,F=identity)=>(...args)=>(pred(...args) ? T : F)(...args);
+export const ife = ifElse;
 export const and = rest(overEvery);
 export const not = negate;
 export const none = negate(overEvery);

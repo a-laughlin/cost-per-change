@@ -1,5 +1,5 @@
 import {createElement} from 'react';
-import {h,withStyles as ws} from './styles.js';
+import {h,styl as ws} from './styles.js';
 import {pipeClicks,withItems,Div} from './hoc-utils.js';
 import {stubNull,compose,pipe} from './utils.js';
 import {xs,map,debounce,debug,startWith,fold} from './xstream-fp.js';
