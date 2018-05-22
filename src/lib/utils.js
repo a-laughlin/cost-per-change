@@ -182,25 +182,23 @@ const pipeAsyncFactory = (catchFn)=>(firstFn,...fns)=>(firstInput,...args)=>{ //
   .catch(catchAndLogPipeError)
 };
 
-// pipeAsync - returns a promise
-// desires:
-//  reference first pipe arg,
-//  reference last pipe arg (default)
-//  reference last non-error
-//  reference any of the above, while while transforming a subset (see demo films filter)
-//  catches errors and allows subsequent fns to decide what to do with them
-//  always returns promise
-//  handles sync and async
-//  enables aborting
-//  Works with lodash/fp out of the box
-//
 export const slice = (...sliceArgs)=>arr=>arr.slice(...sliceArgs);
 export const reverse = arr=>arr.slice(0).reverse(); // immutable array reverse
 export const pipe = (fn1=identity,...fns)=>(arg1,...args)=>fns.reduce((a,f)=>f(a),fn1(arg1,...args));
 export const pipeAsync = (fn1=identity,...fns)=>pipeAllArgsAsync(fn1,...fns.map(arity1));
 export const compose = (...fns)=>pipe(...fns.reverse());
 export const composeAsync = (...fns)=>pipeAsync(...fns.reverse());
-
+export const dataPipe = (...args)=>{
+  let next, acc=[], i=-1;
+  while((next=args[++i])){
+    if(typeof next === 'function'){break;}
+    acc[i]=next;
+  }
+  acc = next(...acc);
+  while((next=args[++i])){acc=next(acc);}
+  return acc;
+}
+export const dpipe = dataPipe;
 
 
 // functions that work with pipeAsync ... this whole section may be replaceable with observable streams
@@ -273,6 +271,14 @@ export const fltrv = fx;
 export const omitv = ox;
 export const mapv = mx;
 
+export const pget = cond(
+  [isString,get],
+  [isArray,pick],
+  [isPlainObject, obj=>target=>mo(f=>pget(f)(target))(obj)],
+  [stubTrue,identity], // handles the function case
+);
+
+
 
 export const sort = (...args)=>arr=>arr.sort(...args)
 export const toggleArrayVal = ifElse(v=>a=>a.includes(v),reject,v=>a=>[...a,v]);
@@ -326,14 +332,9 @@ export const concatBefore = getMatchReplacer((predicate,getReplacement)=>collect
 },[]));
 
 
-// Objects
-export const pget = cond(
-  [isString,get],
-  [isArray,pick],
-  [isPlainObject, obj=>target=>mo(f=>pget(f)(target))(obj)],
-  [stubTrue,identity],
-);
 
+
+// Objects
 export const objStringifierFactory = ({
   getPrefix=()=>'',
   getSuffix=()=>'',
