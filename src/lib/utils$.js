@@ -1,6 +1,6 @@
 import * as xsfp from './xstream-fp.js';
 import {
-  pipe,isObservable,isArray,isPromise,isFunction,isPlainObject,mo,ma, unzip, ife,stubTrue,cond
+  pipe,isObservable,isArray,isPromise,isFunction,isPlainObject,mo,ma,unzip,get,ife,stubTrue,cond,ro
 } from './utils.js';
 import {setObservableConfig,shallowEquals} from 'recompose';
 import xstreamConfig from 'recompose/xstreamObservableConfig';
@@ -93,7 +93,6 @@ export const operatorFactory = ({
   },
   onStop = noop,
   setMemoryOnComplete = identity,
-  // if(shouldStart(completesRemaining===0,initialValsRemaining===0)!==true){return;}
   onNextAfterAll = (v,mem,send)=>{send(v);return v;},
   onNextAfterAllInit = (v,mem,send)=>{send(v);return v;},
   onNextBeforeAll = identity,
@@ -122,6 +121,7 @@ export const operatorFactory = ({
       complete:()=>{
         inputCompleteReceived(i);
         if(!isComplete()){return;}
+        console.log(`complete`);
         // all input streams complete.  cleanup.
         mem = setMemoryOnComplete(mem);
         let L=inputSubscriptions.length;
@@ -150,6 +150,20 @@ export const operatorFactory = ({
   };
   return create$(producer);
 };
+
+export const collection$ = (getter=identity)=>operatorFactory({
+  onNextAfterAllInit : (next,mem,send)=>{
+    const coll = getter(next);
+    send(coll);
+    return coll;
+  },
+  onNextAfterAll : (next,last,send)=>{
+    const coll = getter(next);
+    if(coll!==last){send(coll);}
+    return coll;
+  },
+});
+
 
 // dropShallowEquals
 // dropDeepEquals

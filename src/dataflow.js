@@ -3,14 +3,14 @@ import {hierarchy} from 'd3';
 import {setObservableConfig,createEventHandler,mapPropsStream,componentFromStream,shallowEqual} from 'recompose';
 import {
   pipe,compose,mapv,plog,get as _get,identity,pget,pgetv,ensureArray,set,isObservable,assignAll,
-  mapvToArr,isFunction,ensureFunction,groupByKey,ife,isString,cond,stubTrue,transformToObj,
-  omitv,matches,fltrvToObj,isPlainObject,isNumber,ro,unzip,zipObject,mo,isArray,fa,pick,isObjectLike,
-  every,not,isUndefOrNull,isPromise,or,partition,ma,spread
+  mapvToArr,isFunction,ensureFunction,groupByKey,ife,isString,cond,stubTrue,
+  omitv,matches,fltrvToObj,isPlainObject,isNumber,ro,unzip,zipObject,mo,isArray,fa,fo,pick,isObjectLike,
+  every,not,isUndefOrNull,isPromise,or,partition,ma,spread,get
 } from './lib/utils';
 import {of$,from$,combine$,map,debug,debounce,from,combineWith,flatten,flattenConcurrently,flattenSequentially,addListener,
   addDebugListener,setDebugListener,dropRepeats,flatMapLatest,flatMap,sampleCombine,getDebugListener,
-  removeListener,getListener,subscribe,fold,drop,periodic$,filterChangedItems,takeWhenPropChanged,filter,
-  ensureObservable,remember,flattenDeep,fromPromise$
+  removeListener,getListener,subscribe,fold,drop,periodic$,takeWhenPropChanged,filter,
+  ensureObservable,remember,flattenDeep,fromPromise$,collection$
 } from './lib/utils$.js';
 import {analyse} from './analyse';
 import {loadRepoGraph} from './api'
@@ -38,15 +38,32 @@ export const get$ = cond(
 );
 export const hget$ = compose(mapPropsStream,flatMap,get$);
 
+// export const idxMapFactory = (dataKey='data')=>(...streamsAndArgs)=>props$=>{
+//   const [streams$,fns]=partition(isObservable)(streamsAndArgs);
+//   return combine$(ensureObservable(props$),...streams$).map(
+//     pipe(
+//       ([props,...streams])=>streams.map(s=>s[props[dataKey]]),
+//       spread(pipe(...fns.map(f=>pget(f)))),
+//     )
+//   );
+// };
+
 export const idxMapFactory = (dataKey='data')=>(...streamsAndArgs)=>props$=>{
   const [streams$,fns]=partition(isObservable)(streamsAndArgs);
-  return combine$(ensureObservable(props$),...streams$).map(
-    pipe(
-      ([props,...streams])=>streams.map(s=>s[props[dataKey]]),
-      spread(pipe(...fns.map(f=>pget(f)))),
-    )
-  );
+  return pipe(
+    ()=>combine$(ensureObservable(props$),...streams$),
+    fold((last,[props,...colls])=>{
+      const next = colls.map(c=>c[props[dataKey]]);
+      if(shallowEqual(last,next)){return last;}
+      return next;
+    },[]),
+    drop(1),
+    dropRepeats,
+    map(spread(pipe(...fns.map(f=>pget(f)))))
+  )();
 };
+
+
 
 export const from_target_value = pget({value:'target.value',data:'data'});
 
@@ -59,12 +76,9 @@ const getHandler = (...fns)=>{
 
 
 initialState.userTokens['0'].value = process.env.REACT_APP_GITHUB_TOKEN;
-initialState.analysisMods = {repo0:{id:'repo0',devcost:'80',changetime:'60'}};
-
 const tapUpdater = updater=>pipe(plog('prevState'),updater,plog('nextState'));
 const store = createStore((state,{updater=identity})=>tapUpdater(updater)(state),initialState);
-const store$ = from$(store[Symbol.observable]()).remember();//.startWith(initialState);
-// addDebugListener()(store$);
+const store$ = from$(store[Symbol.observable]()).remember();
 const dispatch = store.dispatch.bind(store);
 
 // data is props.data
@@ -72,8 +86,8 @@ const tplRegex = /\[prop\]\.|\.?prop\./g;
 const tpl = string=>data=>string.replace(tplRegex,`[${data}].`);
 const setStateX = str=>({value,data=''})=>{dispatch({type:'fn',updater:state=>set(tpl(str)(data),value,state)}); return value; };
 const assignToStateX = data=>{
-  console.log(`data`, data);
-  dispatch({type:'fn',updater:state=>Object.assign({},state,...ensureArray(data))});return data;
+  dispatch({type:'fn',updater:state=>Object.assign({},state,...ensureArray(data))});
+  return data;
 }
 
 // assumes collections will not be added or removed
@@ -84,20 +98,17 @@ export const [
 ] = [
   'repos','repoNodes','repoNodeOutEdges','userTokens','analysisMods'
 ].map(name=>pipe(
-  map(s=>s[name]),
-  filterChangedItems(),
+  collection$(s=>s[name]),
   remember,
 )(store$));
 
+
 export const to_repos$ = setStateX('repos');
-export const to_repo_devcost$ = setStateX('repos.prop.devcost');
-export const to_repo_changetime$ = setStateX('repos.prop.changetime');
 export const to_repo_url$ = setStateX('repos.prop.url');
 
 export const analysisMods_by_repoid$ = analysisMods$;
 export const to_analysisMods_devcost = setStateX('analysisMods.prop.devcost')
 export const to_analysisMods_changetime = setStateX('analysisMods.prop.changetime')
-
 
 // files/directory nodes
 export const to_repoNodes$ = setStateX('repoNodes');
@@ -124,17 +135,19 @@ export const codeAnalysesRaw$ = pipe(
   remember,
 )(repoNodes$);
 
+
 export const nodeAnalyses$ = pipe(
-  ()=>analysisMods_by_repoid$,
-  sampleCombine(repoNodes$,codeAnalysesRaw$),
-  fold((prevAnalyses,[mods,repoNodes,analyses])=>{
+  ()=>combine$(codeAnalysesRaw$,analysisMods_by_repoid$),
+  sampleCombine(repoNodes$),
+  fold((prevAnalyses,[[analyses,mods],repoNodes])=>{
+    console.log(`analyses,mods,repoNodes`, analyses,mods,repoNodes);
     const repoData = {costPerChangeMax:0,costPerChangeMin:Infinity};
     let minKey,maxKey;
-    return ro((acc,node)=>{
+    const result = ro((acc,node,nodeid)=>{
       if(!node.code){return;}
       repoData.devcost = mods[node.repoid].devcost;
       repoData.changetime = mods[node.repoid].changetime;
-      const {analysis, code} = analyses[node.id];
+      const {analysis, code} = analyses[nodeid];
       const n = {...node,code};
 
       mapv((v,k)=>{
@@ -154,12 +167,12 @@ export const nodeAnalyses$ = pipe(
       if(repoData.costPerChangeMax<n.costPerChange){repoData.costPerChangeMax=n.costPerChange;}
       acc[n.id] = Object.assign(n,repoData,{id:n.id,repoid:n.repoid});
     })(repoNodes);
+    return result;
   },{}),
   drop(1),
   dropRepeats,
   remember,
 )();
-
 
 // joins
 // export const repos_by_repoNode_id$ = store$
@@ -199,33 +212,40 @@ export const repoNodeOutEdges_by_repoid$ = pipe(
 
 export const d3TreeStructure_by_repoid$ = pipe(
   ()=>repoNodeOutEdges$,
-  filterChangedItems(),
   sampleCombine(repoNodes$),
-  map(([repoNodeOutEdges,repoNodes])=>{
+  fold((prev,[repoNodeOutEdges,repoNodes])=>{
     const rootNodes = {...repoNodes};
     const adjList = mo((outEdgeObj,nodeKey)=>outEdgeObj.edges.map((edgeKey)=>{
       delete rootNodes[edgeKey];
       return repoNodes[edgeKey];
     }))(repoNodeOutEdges);
-    const result = ro((acc,rootNode,k)=>{
+    let changes=0;
+    const result = ro((acc,rootNode,id)=>{
       // map nodes to tree object with parent, children, height, depth properties
+      const prevRoot = prev[rootNode.repoid];
+      if(prevRoot && prevRoot.id===id){acc[rootNode.repoid]=prevRoot;return;}
+      changes++;
       acc[rootNode.repoid] = hierarchy(rootNode,n=>adjList[n.id]);
     })(rootNodes);
-    return result;
-  }),
+    return changes?result:prev;
+  },{}),
+  drop(1),
+  dropRepeats,
+  debug('tree structure changes'),
   remember,
 )();
 
 
-
 // multi-actions
 export const to_repo_copy = getHandler(
-  sampleCombine(repos$,repoNodes$,repoNodeOutEdges$),
-  map(([id,repos,repoNodes,repoNodeOutEdges])=>{
-    const repoid=id+'_1';
+  sampleCombine(repos$,repoNodes$,repoNodeOutEdges$,analysisMods$),
+  map(([id,repos,repoNodes,repoNodeOutEdges,mods])=>{
+    let repoid=id+'_1';
+    while(repos[repoid]){ repoid+='_1'; }
     const re = new RegExp(id,'g');
     const sRepo=(str)=>str.replace(re,repoid);
     const transformRepo = (acc,v,k)=>{ acc[k]=v; if(k===id){acc[repoid]={...v,id:repoid,repoid}}};
+    const transformMods = transformRepo;
     const transformNode = (acc,v,k)=>{
       acc[k]=v;
       if (v.repoid===id) {
@@ -234,20 +254,22 @@ export const to_repo_copy = getHandler(
         if(v.edges){acc[fid].edges=v.edges.map(sRepo);}
       };
     };
-    return assignToStateX({
-      repos:transformToObj(transformRepo)(repos),
-      repoNodes:transformToObj(transformNode)(repoNodes),
-      repoNodeOutEdges:transformToObj(transformNode)(repoNodeOutEdges),
+    assignToStateX({
+      repos:ro(transformRepo)(repos),
+      repoNodes:ro(transformNode)(repoNodes),
+      analysisMods:ro(transformMods)(mods),
+      repoNodeOutEdges:ro(transformNode)(repoNodeOutEdges),
     });
   })
 );
 
 export const to_repo_remove = getHandler(
-  sampleCombine(repos$,repoNodes$,repoNodeOutEdges$),
-  map(([id,repos,repoNodes,repoNodeOutEdges])=>{
+  sampleCombine(repos$,repoNodes$,repoNodeOutEdges$,analysisMods$),
+  map(([id,repos,repoNodes,repoNodeOutEdges,mods])=>{
     assignToStateX({
       repos:omitv(matches({id}))(repos),
       repoNodes:omitv(matches({repoid:id}))(repoNodes),
+      analysisMods:omitv(matches({id}))(mods),
       repoNodeOutEdges:omitv(matches({repoid:id}))(repoNodeOutEdges),
     });
   })

@@ -66,7 +66,7 @@ const QMark = Span(c('?'),h('crP peN usN t.4 lh1.3 tcC pl.3 pr.3 b1x bS brad50% 
 
 
 // User / Info Section
-const TokenTextInput = TextInput(
+const Token_input = TextInput(
   pipeChanges(pget({value:'target.value',data:'data'}),to_userToken$),
   // why, if I reverse these 2 hget$s, or move the style one to the parent, does the style start
   // lagging one action behind?  keeping them in this order, or setting them both on the same
@@ -75,17 +75,17 @@ const TokenTextInput = TextInput(
   hget$({style:userToken$.map(ifenx(len(40),{},{border:'1px solid red'}))}),
   h('w40 b0 bb1x bcD t0.7')
 );
-const TokenTextContainer = Div(c(TokenTextInput));
+const Token_input_wrap = Div(c(Token_input));
 const ghURL = `github.com/settings/tokens`;
 const ruleLink = 'https://github.com/escomplex/escomplex/blob/master/METRICS.md';
-const TokenHelpLink = A(withProps({target:'blank',href:`https://${ghURL}`}), c(ghURL));
-const TokenHelpMsg = Span(c('Get Token at: ',TokenHelpLink));
-const TokenHelp = Span(c(QMark), withModal(TokenHelpMsg));
-const TokenLabel = Label(c('GitHub Token'));
-const AboutModal = P(c(ABOUT_HELP), v('w100% wsPL peN'));
-const About = Span(c('About'),withModal(AboutModal));
+const Tokenlink = A(withProps({target:'blank',href:`https://${ghURL}`}), c(ghURL));
+const Token_hlp_triggr = Span(c('Get Token at: ',Tokenlink));
+const Token_hlp = Span(c(QMark), withModal(Token_hlp_triggr));
+const Token_label = Label(c('GitHub Token'));
+const About_modal = P(c(ABOUT_HELP), v('w100% wsPL peN'));
+const About = Span(c('About'),withModal(About_modal));
 const TokenArea = Div(
-  c([TokenLabel,TokenHelp,TokenTextContainer,About].map(hi('nth3mrAuto first:ml.5 last:mr.5'))),
+  c([Token_label,Token_hlp,Token_input_wrap,About].map(hi('nth3mrAuto first:ml.5 last:mr.5'))),
   h('w100%')
 );
 
@@ -137,15 +137,13 @@ const TreeRoot = ({node,parentNode,id,analyses})=>(
 
 const TreeSVG = Svg(
   c(idx(d3TreeStructure_by_repoid$,(treeObj)=>{
+    if(treeObj === undefined){return stubNull;} // TODO figure out why this happens
     const w=290, h=290;
     const root = Object.assign(d3.tree().size([h,w])(treeObj),{x:(h-0.1*h)/2,y:0.1*h});
     return toItemProps(TreeRoot)({node:root,parentNode:root,id:root.data.repoid});
   })),
   h('minw300px minh300px')
 );
-
-
-
 
 
 // Rules
@@ -163,23 +161,23 @@ const Rules = Div(c('Rules',[MaintRule,EffortRule,CyclomaticRule].map(vi(rule_st
 
 
 // Metrics Grid Header Row
-const RulesImpactText = Span(c(`How do this file's rules compare against repo max?`),v('wsPL'));
-const RulesImpactHelpTrigger = Span(c(QMark),withModal(RulesImpactText));
-const RulesImpact = Span(c('Rules Impact',RulesImpactHelpTrigger),h);
-const CostPerChangeText = Span(c(`(171-maintainability)/1000*devcost*changetime`),v('wsPL'));
-const CostPerChangeHelpTrigger = Span(c(QMark),withModal(CostPerChangeText));
-const CostPerChange = Span(c('Cost per Change',CostPerChangeHelpTrigger),h);
-const UserImpactText = Span(c(`Just cyclomatic complexity for now.`),v('wsPL'));
-const UserImpactHelpTrigger = Span(c(QMark),withModal(UserImpactText));
-const UserImpact = Span(c('User Impact',UserImpactHelpTrigger),h);
+const Rules_imp_txt = Span(c(`How do this file's rules compare against repo max?`),v('wsPL'));
+const Rules_imp_hlp_trigger = Span(c(QMark),withModal(Rules_imp_txt));
+const RulesImpact = Span(c('Rules Impact',Rules_imp_hlp_trigger),h);
+const CPCtxt = Span(c(`(171-maintainability)/1000*devcost*changetime`),v('wsPL'));
+const CPC_hlp_trigger = Span(c(QMark),withModal(CPCtxt));
+const CostPerChange = Span(c('Cost per Change',CPC_hlp_trigger),h);
+const User_imp_txt = Span(c(`Just cyclomatic complexity for now.`),v('wsPL'));
+const User_imp_hlp_trigger = Span(c(QMark),withModal(User_imp_txt));
+const UserImpact = Span(c('User Impact',User_imp_hlp_trigger),h);
 const PathHeader = Span(c('Path'));
 
 // Metrics Grid Cells
 
-const GridCellCostPerChange = Span(c(idx(nodeAnalyses$,get(`costPerChange`),round)));
-const GridCellUserImpact = Span(c(idx(nodeAnalyses$,get(`userImpact`),round)));
-const GridCellPath = Span(c(idx(repoNodes$,get(`path`),p=>p.replace(/^.+\//g,''))));
-const GridCellRulesImpact = Div(c(pipe(
+const Cell_cpc = Span(c(idx(nodeAnalyses$,get(`costPerChange`),round)));
+const Cell_usr_imp = Span(c(idx(nodeAnalyses$,get(`userImpact`),round)));
+const Cell_path = Span(c(idx(repoNodes$,get(`path`),p=>p.replace(/^.+\//g,''))));
+const Cell_rules_imp = Div(c(pipe(
   idx(nodeAnalyses$), dropRepeats, map((node)=>{
     const styles = ([// should generate these based on selected rules, but select/deselect nodes isn't implemented yet
       {backgroundColor:reds[4],width:(node.maintainability/node.maintainabilityMax)*100},
@@ -192,7 +190,6 @@ const GridCellRulesImpact = Div(c(pipe(
     });
   }),
 )));
-
 const MetricsBody = Div(
   c([PathHeader, RulesImpact, CostPerChange, UserImpact]
     .map(gi('mb.3 nthn-+4mb1','nthn4-3w19%_mr1% nthn4-2w44%_mr1% nthn4-1w19%_mr1% nthn4w14%_mr1%')),
@@ -204,7 +201,7 @@ const MetricsBody = Div(
         reverse,
         slice(0,10),
         ma(pipe(
-          pass_id(GridCellPath,GridCellRulesImpact,GridCellCostPerChange,GridCellUserImpact),
+          pass_id(Cell_path, Cell_rules_imp, Cell_cpc, Cell_usr_imp),
           ma(gi('mb.3 nthn-+4mb1 nthn4-3w19%_mr1% nthn4-2w44%_mr1% nthn4-1w19%_mr1% nthn4w14%_mr1%'))
         ))
       ))
@@ -221,21 +218,21 @@ const DevCostPerHour = Input(
   pipeChanges(from_target_value,to_analysisMods_devcost),
   h('w3 t0.8')
 );
-const dcText = Span(c(`Developer Hourly Rate, to calculate cost per change.`),v('wsPL'));
-const dcHelp = Span(c(QMark),withModal(dcText));
-const dcLabel = Label(c('Dev Hourly Cost'),h('t0.8'));
+const DCtxt = Span(c(`Developer Hourly Rate, to calculate cost per change.`),v('wsPL'));
+const DChelp = Span(c(QMark),withModal(DCtxt));
+const DClabel = Label(c('Dev Hourly Cost'),h('t0.8'));
 
 const TimePerChange = TextInput(
   hget$({defaultValue:idx(analysisMods_by_repoid$,'changetime')}),
   pipeChanges(from_target_value,to_analysisMods_changetime),
   h('w3 t0.8')
 );
-const tpcText = Span(c(TIME_PER_CHANGE_HELP),v('wsPL'));
-const tpcHelp = Span(c(QMark),withModal(tpcText));
-const tpcLabel = Label(c('Time Per Change'),h('t0.8'));
+const TPCtxt = Span(c(TIME_PER_CHANGE_HELP),v('wsPL'));
+const TPChlp = Span(c(QMark),withModal(TPCtxt));
+const TPClabel = Label(c('Time Per Change'),h('t0.8'));
 
 const MetricsParams = Div(
-  c(cpipe(tpcLabel, tpcHelp, TimePerChange, dcLabel, dcHelp, DevCostPerHour)(hi('ml.5'))),
+  c(cpipe(TPClabel, TPChlp, TimePerChange, DClabel, DChelp, DevCostPerHour)(hi('ml.5'))),
   h('mtAuto')
 );
 
