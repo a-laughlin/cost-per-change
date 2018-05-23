@@ -22,12 +22,12 @@ import {repos$,to_repo_devcost$, to_repo_changetime$,
   from_target_value,repoNodes_by_repoid$,repoNodes$,repos_id$,repoNodeOutEdges$,
   userToken$, to_userToken$,to_repo_copy,to_repo_remove,to_repo_url,repoNodeOutEdges_by_repoid$,
   repoNodes_costPerChange$,repoNodes_userImpact$,repos_by_repoNode_id$,pipeCollection,
-  repoNodes_path$,nodeAnalyses$,nodeAnalyses_by_repoid$,get$,hget$,idxMapFactory,d3TreeStructure_by_repoid$,
+  repoNodes_path$,nodeAnalyses$,nodeAnalyses_by_repoid$,get$,d3TreeStructure_by_repoid$,
   analysisMods_by_repoid$, to_analysisMods_devcost, to_analysisMods_changetime,
 } from './dataflow.js';
 
 import {Circle,Text,Div,Span,Img,H1,Input,A,Label,Svg,TextInput,Button,Header,Pre,P,toItemProps,
-  withItemsHOCFactory, pipeClicks, pipeChanges
+  withItemsHOCFactory, pipeClicks, pipeChanges,hget$,idxMapFactory
 } from './lib/hoc-utils.js';
 
 // data imports
@@ -174,9 +174,9 @@ const PathHeader = Span(c('Path'));
 
 // Metrics Grid Cells
 
-const Cell_cpc = Span(c(idx(nodeAnalyses$,get(`costPerChange`),round)));
-const Cell_usr_imp = Span(c(idx(nodeAnalyses$,get(`userImpact`),round)));
-const Cell_path = Span(c(idx(repoNodes$,get(`path`),p=>p.replace(/^.+\//g,''))));
+const Cell_cpc = Span(c(idx(nodeAnalyses$,'costPerChange',round)));
+const Cell_usr_imp = Span(c(idx(nodeAnalyses$,'userImpact',round)));
+const Cell_path = Span(c(idx(repoNodes$,'path',p=>p.replace(/^.+\//g,''))));
 const Cell_rules_imp = Div(c(pipe(
   idx(nodeAnalyses$), dropRepeats, map((node)=>{
     const styles = ([// should generate these based on selected rules, but select/deselect nodes isn't implemented yet

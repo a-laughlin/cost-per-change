@@ -194,6 +194,7 @@ export const dataPipe = (...args)=>{
     if(typeof next === 'function'){break;}
     acc[i]=next;
   }
+  if(i===args.length){return acc;}
   acc = next(...acc);
   while((next=args[++i])){acc=next(acc);}
   return acc;

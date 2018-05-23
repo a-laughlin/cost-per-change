@@ -194,6 +194,20 @@ export const $ifnot = pipe(fn=>(...args)=>!fn(...args),$if);
 //   addDebugListener('cbug')(randomVal$);
 // },5000)
 
+// const compareColls = (prev,next={},equalityCheck=(a,b)=>a===b,prevLen=0)=>{
+//   if(prev===undefined){return next}
+//   if(prevLen===0){for(k in prev){++prevLen;}}
+//   let k, nextLen=0, changes=0, next_temp={};
+//   for(k in next){
+//     ++nextLen;
+//     if(equalityCheck(prev[k],next[k])){continue;}
+//     ++changes;
+//     next_temp[k]=next[k];
+//   }
+//   if(changes || nextLen !== _.len){_.len=nextLen; _.latest = next_latest;}
+//   return _.latest;
+// }
+
 
 export const filterChangedItems = (prop='')=>changedColl$=>pipe(
   fold((lastObj={},nextObj={})=>{

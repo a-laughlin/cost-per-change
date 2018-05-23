@@ -5,7 +5,7 @@ import {
   pipe,compose,mapv,plog,get as _get,identity,pget,pgetv,ensureArray,set,isObservable,assignAll,
   mapvToArr,isFunction,ensureFunction,groupByKey,ife,isString,cond,stubTrue,
   omitv,matches,fltrvToObj,isPlainObject,isNumber,ro,unzip,zipObject,mo,isArray,fa,fo,pick,isObjectLike,
-  every,not,isUndefOrNull,isPromise,or,partition,ma,spread,get
+  every,not,isUndefOrNull,isPromise,or,partition,ma,spread,get,dpipe,ifenx,is,split,ra,argsToArray
 } from './lib/utils';
 import {of$,from$,combine$,map,debug,debounce,from,combineWith,flatten,flattenConcurrently,flattenSequentially,addListener,
   addDebugListener,setDebugListener,dropRepeats,flatMapLatest,flatMap,sampleCombine,getDebugListener,
@@ -16,52 +16,6 @@ import {analyse} from './analyse';
 import {loadRepoGraph} from './api'
 import {initialState} from './static/initial-state';
 
-export const simpleStore = (initialState={})=>{
-  const {stream,handler}=createEventHandler();
-  const store$ = stream.fold((state,{updater=identity})=>updater(state),initialState);
-  const dispatch = fn=>handler({type:'fn',updater:fn});// mock redux dispatch for compatibility
-  return {store$,dispatch};
-}
-export const get$ = cond(
-  // ordering based on lodash source code, for minimum checks
-  [or(isString,isNumber),s=>props=>of$(s)],
-  [isObservable,obs$=>props=>obs$],
-  [isArray,arr=>props=>combine$(of$(props),...arr.map(v=>get$(v)(props)))],
-  [isFunction, fn=>props=>get$(fn(props))(props)],
-  [isPromise, prom=>props=>fromPromise$(prom)],
-  [isObjectLike, obj=>props=>{
-    const mapped = mo(v=>get$(v)(props))(obj);
-    const [keys,vals$] = unzip(Object.entries(mapped));
-    return combine$(...vals$).map(vals=>Object.assign(zipObject(keys,vals),props));
-  }],
-  [stubTrue,x=>props=>ensureObservable(x)],
-);
-export const hget$ = compose(mapPropsStream,flatMap,get$);
-
-// export const idxMapFactory = (dataKey='data')=>(...streamsAndArgs)=>props$=>{
-//   const [streams$,fns]=partition(isObservable)(streamsAndArgs);
-//   return combine$(ensureObservable(props$),...streams$).map(
-//     pipe(
-//       ([props,...streams])=>streams.map(s=>s[props[dataKey]]),
-//       spread(pipe(...fns.map(f=>pget(f)))),
-//     )
-//   );
-// };
-
-export const idxMapFactory = (dataKey='data')=>(...streamsAndArgs)=>props$=>{
-  const [streams$,fns]=partition(isObservable)(streamsAndArgs);
-  return pipe(
-    ()=>combine$(ensureObservable(props$),...streams$),
-    fold((last,[props,...colls])=>{
-      const next = colls.map(c=>c[props[dataKey]]);
-      if(shallowEqual(last,next)){return last;}
-      return next;
-    },[]),
-    drop(1),
-    dropRepeats,
-    map(spread(pipe(...fns.map(f=>pget(f)))))
-  )();
-};
 
 
 
@@ -81,6 +35,96 @@ const store = createStore((state,{updater=identity})=>tapUpdater(updater)(state)
 const store$ = from$(store[Symbol.observable]()).remember();
 const dispatch = store.dispatch.bind(store);
 
+const cache = {
+  o:store$,
+  latest:initialState,
+  c:{},
+}
+
+const toLevelMappersDefault = ma(part=>(lvl,mapPath,preObserve)=>lvl.c[part]||(lvl.c[part]={
+  o:dpipe(lvl.o,map(parent=>mapPath(parent,lvl,part)),preObserve),
+  latest:'',
+  c:{}
+}));
+const mapPathDefault = (parent,lvl,part)=>(lvl.c[part].latest = parent[part]);
+export const getCached =({
+  mapOutput = identity,
+  mapPath = mapPathDefault,
+  toLevelMappers = toLevelMappersDefault
+}={})=>pipe(
+  ensureArray,
+  toLevelMappers,
+  pm=>pm.reduce((lvl,fn)=>fn(lvl,mapPath,mapOutput),cache)
+)
+
+const logCache = msg=>(output)=>{
+  console.log(msg,`output`, output);
+  const inner = (lvl=cache,mapped={})=>{
+    if(!isPlainObject(lvl.latest)){return lvl.latest;}
+    if(lvl._){
+      mapped._ = mo(ife(isString),identity,v=>typeof v)(lvl._.latest);
+    }
+    let k;
+    for(k in lvl.c){
+      mapped[k]=inner(lvl.c[k]);
+    }
+    return mapped;
+  };
+  console.log(msg,`cache`, JSON.stringify(inner(cache),null,1));
+  console.log(msg,`raw cache`, cache);
+  return output;
+}
+const logoutput = msg=>(out)=>(isObservable(out)?map:identity)(logCache(msg))(out);
+
+export const getCached$ = (args)=>pipe(getCached(args),({o})=>o);
+const getCachedUnique$ = getCached$({mapOutput:pipe(dropRepeats,remember)});
+const parse$ = args=>pipe(split('.'),getCached(args));
+const parseUnique$ = pipe(split('.'),getCachedUnique$);
+export const tpltemp = (s,props)=>s.replace(/\[(.+?)\]/g,(_,key)=>`.${props[key]}.`);
+export const pcacheOne$ = (str)=>pipe( props=>tpltemp(str,props).split('.'), getCachedUnique$);
+export const pcache$ = (...strs)=>props=>{
+  return strs.length===0
+    ? of$(undefined)
+    : strs.length > 1
+      ? combine$(...strs.map(s=>pcacheOne$(s)(props)))
+      : pcacheOne$(strs[0])(props);
+};
+
+
+export const [
+  repos$, repoNodes$, repoNodeOutEdges$, userTokens$, analysisMods$,
+] = ['repos','repoNodes','repoNodeOutEdges','userTokens','analysisMods']
+.map(getCachedUnique$);
+
+// these are the only events to handle!!
+// collections
+// collections items adding
+// collections items removing
+// collection item props updating
+
+// why? managing state updates, observerable updates, combining streams, is challgenging to get right
+// inspired by mobx and redux, more fp, opinionated state structure
+// const idxget$('repos','repo0','url');
+// how dynamically create indices?
+// (edit: see the getLevelMapper fn - enables handling on a per-part basis)
+// const idx$ = parse$({mapOutput:pipe(fold(),drop(1),dropRepeats,remember)})
+  // ('repNodes',get()by.repos.[repoid]')
+
+// dpipe(
+//   cache$('repoNodeOutEdges.data.edges')({data:'repo0_root'}),
+//   logoutput('repoNodeOutEdges.data.edges.0'),
+//   addDebugListener
+// );
+
+
+
+
+
+
+
+
+
+
 // data is props.data
 const tplRegex = /\[prop\]\.|\.?prop\./g;
 const tpl = string=>data=>string.replace(tplRegex,`[${data}].`);
@@ -92,15 +136,6 @@ const assignToStateX = data=>{
 
 // assumes collections will not be added or removed
 // assumes collection items will be added and removed
-
-export const [
-  repos$, repoNodes$, repoNodeOutEdges$, userTokens$, analysisMods$,
-] = [
-  'repos','repoNodes','repoNodeOutEdges','userTokens','analysisMods'
-].map(name=>pipe(
-  collection$(s=>s[name]),
-  remember,
-)(store$));
 
 
 export const to_repos$ = setStateX('repos');
@@ -115,14 +150,13 @@ export const to_repoNodes$ = setStateX('repoNodes');
 
 
 // user github token
-export const userToken$ = pipe(map(_get('0.value')),dropRepeats,remember)(userTokens$);
+export const userToken$ = parseUnique$('userTokens.0.value');
 export const to_userToken$ = setStateX('userTokens.0.value');
 
-
-// analyses
-export const codeAnalysesRaw$ = pipe(
+export const codeAnalysesRaw$ = dpipe(
+  repoNodes$,
   fold((prevAnalyses,repoNodes)=>{
-    let changes = 0;
+    let changes = 0,nextLen=0;
     const analyses = mo((n,id)=>{
       if(prevAnalyses[id]){return prevAnalyses[id];}
       changes++;
@@ -133,14 +167,13 @@ export const codeAnalysesRaw$ = pipe(
   drop(1),
   dropRepeats,
   remember,
-)(repoNodes$);
+);
 
 
-export const nodeAnalyses$ = pipe(
-  ()=>combine$(codeAnalysesRaw$,analysisMods_by_repoid$),
+export const nodeAnalyses$ = dpipe(
+  combine$(codeAnalysesRaw$,analysisMods_by_repoid$),
   sampleCombine(repoNodes$),
   fold((prevAnalyses,[[analyses,mods],repoNodes])=>{
-    console.log(`analyses,mods,repoNodes`, analyses,mods,repoNodes);
     const repoData = {costPerChangeMax:0,costPerChangeMin:Infinity};
     let minKey,maxKey;
     const result = ro((acc,node,nodeid)=>{
@@ -172,43 +205,24 @@ export const nodeAnalyses$ = pipe(
   drop(1),
   dropRepeats,
   remember,
-)();
+);
 
 // joins
 // export const repos_by_repoNode_id$ = store$
-export const repos_by_repoNode_id$ = pipe(
-  ()=>combine$(repos$,repoNodes$),
+export const repos_by_repoNode_id$ = dpipe(
+  combine$(repos$,repoNodes$),
   map(([r,nodes])=>mapv(n=>r[n.repoid])(nodes)),
   remember,
-)();
+);
 
-
-export const nodeAnalyses_by_repoid$ = pipe(
-  map(ro((acc,n,nid)=>{
-    const {repoid,id} = n
-    acc[repoid] || (acc[repoid] = {});
-    acc[repoid][id]=n;
-  })),
-  remember,
-)(nodeAnalyses$);
-
-export const repoNodes_by_repoid$ = pipe(
-  map(ro((acc,n,nid)=>{
-    const {repoid,id} = n
-    acc[repoid] || (acc[repoid] = {});
-    acc[repoid][id]=n;
-  })),
-  remember,
-)(repoNodes$);
-
-export const repoNodeOutEdges_by_repoid$ = pipe(
-  map(ro((acc,edge)=>{
-    const {repoid,id} = edge;
-    acc[repoid] || (acc[repoid] = {});
-    acc[repoid][id]=edge;
-  })),
-  remember,
-)(repoNodeOutEdges$);
+export const createIdx = (fk,pk)=>ro((acc,next)=>{
+  const [id,fid]=[next[pk],next[fk]];
+  acc[fid] || (acc[fid] = {});
+  acc[fid][id]=next;
+});
+export const repoNodes_by_repoid$ = pipe(map(createIdx('repoid','id')), remember )(repoNodes$);
+export const nodeAnalyses_by_repoid$ = pipe(map(createIdx('repoid','id')), remember )(nodeAnalyses$);
+export const repoNodeOutEdges_by_repoid$ = pipe(map(createIdx('repoid','id')), remember )(repoNodeOutEdges$)
 
 export const d3TreeStructure_by_repoid$ = pipe(
   ()=>repoNodeOutEdges$,

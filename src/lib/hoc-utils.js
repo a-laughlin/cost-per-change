@@ -1,7 +1,9 @@
 /* eslint-disable no-unused-vars */
 import {Component,isValidElement,cloneElement,createElement as Elem,Children,Fragment} from 'react';
 import PropTypes from 'prop-types';
-import {mapProps, withReducer, isClassComponent,withProps,withHandlers,mapPropsStream,componentFromStream} from 'recompose';
+import {mapProps, withReducer, isClassComponent,withProps,
+  withHandlers,mapPropsStream,shallowEqual,componentFromStream,createEventHandler
+} from 'recompose';
 // import {styleObjectToClasses,mergeStyles} from './styles.js';
 import {merge,mergeWith} from 'lodash';
 import {
@@ -9,12 +11,12 @@ import {
   get, transform,flatten,find,mapValues,flattenDeep,flatMap, compose,reduce,cond,pipeAsync,pick,
   omit,ensureArray,plog,isNumber,isFalsy,stubNull,len0,len1,first,over,set,condNoExec,not,mapv,
   argsToArray,arrayToArgs,acceptsArgsOrArray,curry,isArray,unset,toEmptyCopy,isObservable,
-  mapvToObjv,ensureFunction,constant,omitv,pipeAllArgsAsync,and,isProductionEnv,ifElse,has,every,ra
-
+  mapvToObjv,ensureFunction,constant,omitv,pipeAllArgsAsync,and,isProductionEnv,ifElse,has,every,ra,
+  partition,spread,pget,or,isPromise,isObjectLike,mo,unzip,zipObject
 } from './utils';
-import {of$,from$,take,combine$,map,toArray,periodic$,flatMap as flatMap$,combineWith,
+import {of$,from$,take,combine$,map,toArray,periodic$,flatMap as $flatMap,combineWith,
   flattenSequentially,flattenConcurrently,buffer,never$,addDebugListener,debug,
-  flattenDeep as flattenDeep$,ensureObservable
+  flattenDeep as flattenDeep$,ensureObservable,drop,dropRepeats,fold,fromPromise$
 } from './utils$.js';
 
 
@@ -160,6 +162,67 @@ export const tpl = curry((s,data)=>s.replace(/\[(.+?)\]/g,(_,key)=>`[${get(key)(
 
 
 
+
+
+
+
+// export const idxMapFactory = (dataKey='data')=>(...streamsAndArgs)=>props$=>{
+//   const [streams$,fns]=partition(isObservable)(streamsAndArgs);
+//   return combine$(ensureObservable(props$),...streams$).map(
+//     pipe(
+//       ([props,...streams])=>streams.map(s=>s[props[dataKey]]),
+//       spread(pipe(...fns.map(f=>pget(f)))),
+//     )
+//   );
+// };
+export const idxMapFactory = (dataKey='data')=>(...streamsAndArgs)=>props$=>{
+  const [streams$,fns]=partition(isObservable)(streamsAndArgs);
+  return pipe(
+    ()=>combine$(ensureObservable(props$),...streams$),
+    fold((last,[props,...colls])=>{
+      const next = colls.map(c=>c[props[dataKey]]);
+      if(shallowEqual(last,next)){return last;}
+      return next;
+    },[]),
+    drop(1),
+    dropRepeats,
+    map(spread(pipe(...fns.map(f=>pget(f)))))
+  )();
+};
+
+
+export const toItemPropsFactory = (dataKey='data')=>(...Components)=>(ownProps)=>Components.map((C,i)=>(props)=>(
+  Elem(C,{key:(ownProps[dataKey]||'')+i,...props,...ownProps})
+));
+export const toItemProps = toItemPropsFactory();
+
+
+
+export const simpleStore = (initialState={})=>{
+  const {stream,handler}=createEventHandler();
+  const store$ = stream.fold((state,{updater=identity})=>updater(state),initialState);
+  const dispatch = fn=>handler({type:'fn',updater:fn});// mock redux dispatch for compatibility
+  return {store$,dispatch};
+}
+
+export const $get = cond(
+  // ordering based on lodash source code, for minimum checks
+  [or(isString,isNumber),s=>props=>of$(s)],
+  [isObservable,obs$=>props=>obs$],
+  [isArray,arr=>props=>combine$(of$(props),...arr.map(v=>$get(v)(props)))],
+  [isFunction, fn=>props=>$get(fn(props))(props)],
+  [isPromise, prom=>props=>fromPromise$(prom)],
+  [isObjectLike, obj=>props=>{
+    const mapped = mo(v=>$get(v)(props))(obj);
+    const [keys,vals$] = unzip(Object.entries(mapped));
+    return combine$(...vals$).map(vals=>Object.assign(zipObject(keys,vals),props));
+  }],
+  [stubTrue,x=>props=>ensureObservable(x)],
+);
+export const hget$ = compose(mapPropsStream,$flatMap,$get);
+// hget$(coll,prop) - could automatically create an observable for each prop
+
+
 // phases (prototyping)
 //  store and streams in dataflow
 //  styles connected directly to components
@@ -167,6 +230,7 @@ export const tpl = curry((s,data)=>s.replace(/\[(.+?)\]/g,(_,key)=>`[${get(key)(
 //  set directly to state
 //  business logic - on components (only one add todo button, why not?, the architecture makes it dead simple to move later)
 // phases (prototyping +1)
+//  typing becomes important - the collections get too complex to hold in your head
 
 
 
@@ -197,51 +261,12 @@ export const tpl = curry((s,data)=>s.replace(/\[(.+?)\]/g,(_,key)=>`[${get(key)(
 // minimal elements
 // minimal streams
 
-const replacedGet = curry((s,props)=>get(tpl(s,props),props),2);
-const replacedPick = curry((arr,props)=>pick(arr.map(s=>tpl(s,props)))(props),2);
-export const polyGet = cond([
-  [isFunction,identity],
-  [isString,replacedGet],
-  [isArray,replacedPick],
-  [isPlainObject, fnsObj=>targetObj=>mapv((fn,k)=>(polyGet(fn))(targetObj))(fnsObj)],
-]);
 
 
-export const toItemPropsFactory = (dataKey='data')=>(...Components)=>(ownProps)=>Components.map((C,i)=>(props)=>(
-  Elem(C,{key:(ownProps[dataKey]||'')+i,...props,...ownProps})
-));
-export const toItemProps = toItemPropsFactory();
 
 
-/**
- * optional Lightweight global state handling - replaceable with redux, graphql, etc.
- */
-export const statePropKey = 'data-s';
-export const statePublishKey = 'data-pub';
-export const mergeStateProps = (props)=>({...props[statePropKey],...props});
-const PK = statePublishKey;
-export const withGlobalState = ({initialState={},
-  // tapUpdater=identity,
-  tapUpdater=updater=>pipe(plog('prevState'),updater,plog('nextState')),
-}={})=>withReducer(statePropKey,PK,(prev,updater)=>tapUpdater(updater)(prev),initialState);
 
-export const toStateWith = (fn)=>(d,p)=>{
-  p[PK](state=>({...state,...fn(state,d,p)})); return d;
-}
-export const assignToState = (d,p)=>{
-  p[PK](state=>Object.assign({},state,...ensureArray(d)));
-  return d;
-}
-export const toState = str=>(d,p)=>{p[PK](state=>set(tpl(str,p),d,state)); return d; };
-export const unsetState = str=>(d,p)=>{ p[PK](state=>unset(tpl(str,p),state)); return d; };
-export const mergeState = (mergeFn=(dv,sv)=>(isPlainObject(dv) ? {...dv,...sv} : sv))=>(d,p)=>{
-  p[PK](state=>mergeWith({},state,d,mergeFn));
-  return d;
-};
-export const clearState = str=>(d,p)=>{ const s = tpl(str,p);
-  p[PK](state=>set(s,toEmptyCopy(get(s,state)),state));
-  return d;
-}
+
 
 // non-dom-mutating d3 modules
 // d3-array
