@@ -291,7 +291,14 @@ export const groupByProps = (propTransformer=identity)=>transformToObj((dest,src
   forOwn((val,key)=>{propTransformer(dest[key],src[key],key,dest,src)})(src);
 });
 export const assignPropsToArrays = groupByProps((dv,sv,k,d,s)=>ensureArrayProp(d,k).push(sv));
-export const groupByKey = (key)=>groupByProps((dv,sv,k,d,s)=>k===key && ensureArrayProp(d,k).push(s))
+export const groupByKey = (key,getNestedKey = identity)=>{
+  let k;
+  return ro((acc,next,originalKey)=>{
+    k = next[key];
+    acc[k] || (acc[k] = {});
+    acc[k][getNestedKey(originalKey,next)]=next;
+  });
+};
 export const groupByKeys = groupByProps((dv,sv,k,d,s)=>ensureArrayProp(d,k).push(s))
 export const groupByValues = groupByProps((dv,sv,k,d,s)=>ensureArray(sv).forEach(v=>ensureArrayProp(d,v).push(s)));
 // const aColl = [{a:[1,2]}, {b:[2]}, {c:[1,3]}];

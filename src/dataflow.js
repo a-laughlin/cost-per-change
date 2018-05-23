@@ -215,14 +215,9 @@ export const repos_by_repoNode_id$ = dpipe(
   remember,
 );
 
-export const createIdx = (fk,pk)=>ro((acc,next)=>{
-  const [id,fid]=[next[pk],next[fk]];
-  acc[fid] || (acc[fid] = {});
-  acc[fid][id]=next;
-});
-export const repoNodes_by_repoid$ = pipe(map(createIdx('repoid','id')), remember )(repoNodes$);
-export const nodeAnalyses_by_repoid$ = pipe(map(createIdx('repoid','id')), remember )(nodeAnalyses$);
-export const repoNodeOutEdges_by_repoid$ = pipe(map(createIdx('repoid','id')), remember )(repoNodeOutEdges$)
+export const repoNodes_by_repoid$ = pipe(map(groupByKey('repoid')), remember )(repoNodes$);
+export const nodeAnalyses_by_repoid$ = pipe(map(groupByKey('repoid')), remember )(nodeAnalyses$);
+export const repoNodeOutEdges_by_repoid$ = pipe(map(groupByKey('repoid')), remember )(repoNodeOutEdges$)
 
 export const d3TreeStructure_by_repoid$ = pipe(
   ()=>repoNodeOutEdges$,
