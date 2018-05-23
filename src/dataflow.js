@@ -245,7 +245,6 @@ export const d3TreeStructure_by_repoid$ = pipe(
   },{}),
   drop(1),
   dropRepeats,
-  debug('tree structure changes'),
   remember,
 )();
 

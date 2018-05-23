@@ -11,46 +11,6 @@ import { isComponentString, isComponent, mergeableHocFactory } from './hoc-utils
 /* eslint-disable no-unused-vars */
 
 
-const listStyles={};
-listStyles.lHorizontal = {
-  listStyleType:'none',
-  display:'flex',
-  flexDirection:'row',
-  alignItems:'center',
-  alignContent:'flex-start',
-  justifyContent:'flex-start',
-  flexWrap:'nowrap',
-};
-listStyles.lVertical = {
-  ...listStyles.lHorizontal,
-  flexDirection:'column',
-  alignItems:'flex-start',
-};
-listStyles.lGrid = {
-  ...listStyles.lHorizontal,
-  flexWrap:'wrap',
-  alignItems:'flex-start',
-  justifyContent:'space-evenly',
-};
-
-listStyles.lHorizontalItem = {
-  listStyleType:'none',
-  flexGrow:'0',
-  flexShrink:'1',
-  flexBasis:'auto',
-  width:'auto',
-  height:'auto',
-};
-listStyles.lVerticalItem = {
-  ...listStyles.lHorizontalItem,
-  flexShrink:'0',
-};
-listStyles.lGridItem = {
-  ...listStyles.lHorizontalItem,
-};
-
-
-
 export const parseStyleString = (()=>{
   const styleMatcher = /^([a-z]+)([A-Z0-9.:#\+\-]+)(.*)$/;
   const getSizeVal = (num,unit)=>`${num}${units[unit]}`;
@@ -63,7 +23,7 @@ export const parseStyleString = (()=>{
         :`${num}${unit}`
   );
   let parser = (s,[_,prefix,num,unit]=s.match(styleMatcher))=>prefixes[prefix](num,unit);
-  if(!isProductionEnv()) {
+  if(process.env.NODE_ENV !== 'production'){
     parser = s => {
       try{
         const [_,prefix,num,unit]=s.match(styleMatcher);
@@ -154,23 +114,23 @@ export const parseStyleString = (()=>{
   };
   const cache = {
     // lists
-    lInline:{display:'inline-flex'},
-    lShrink0:{flexShrink:'0'},
-    lGrow1:{flexGrow:'1'},
-    lAIS:{alignItems:'flex-start'},
-    lACS:{alignContent:'flex-start'},
-    lAIC:{alignItems:'center'},
-    lAIStretch:{alignItems:'stretch'},
-    lACC:{alignContent:'center'},
-    lAIE:{alignItems:'flex-end'},
-    lACE:{alignContent:'flex-end'},
-    lJCE:{justifyContent:'flex-end'},
-    lJCS:{justifyContent:'flex-start'},
-    lJCStretch:{justifyContent:'stretch'},
-    lJCC:{justifyContent:'center'},
-    lJCSA:{justifyContent:'space-around'},
-    lJCSB:{justifyContent:'space-between'},
-    lJCSE:{justifyContent:'space-evenly'},
+    fInline:{display:'inline-flex'},
+    fShrink0:{flexShrink:'0'},
+    fGrow1:{flexGrow:'1'},
+    fAIS:{alignItems:'flex-start'},
+    fACS:{alignContent:'flex-start'},
+    fAIC:{alignItems:'center'},
+    fAIStretch:{alignItems:'stretch'},
+    fACC:{alignContent:'center'},
+    fAIE:{alignItems:'flex-end'},
+    fACE:{alignContent:'flex-end'},
+    fJCE:{justifyContent:'flex-end'},
+    fJCS:{justifyContent:'flex-start'},
+    fJCStretch:{justifyContent:'stretch'},
+    fJCC:{justifyContent:'center'},
+    fJCSA:{justifyContent:'space-around'},
+    fJCSB:{justifyContent:'space-between'},
+    fJCSE:{justifyContent:'space-evenly'},
 
     // borders
     bS:{borderStyle:'solid'},
@@ -266,6 +226,44 @@ export const parseStyleString = (()=>{
     ':hover':cache.tUnderline,
     ':active':cache.tUnderline,
   };
+
+  cache.fh = {
+    listStyleType:'none',
+    display:'flex',
+    flexDirection:'row',
+    alignItems:'center',
+    alignContent:'flex-start',
+    justifyContent:'flex-start',
+    flexWrap:'nowrap',
+  };
+  cache.fv = {
+    ...cache.fh,
+    flexDirection:'column',
+    alignItems:'flex-start',
+  };
+  cache.fg = {
+    ...cache.fh,
+    flexWrap:'wrap',
+    alignItems:'flex-start',
+    justifyContent:'space-evenly',
+  };
+
+  cache.fhi = {
+    listStyleType:'none',
+    flexGrow:'0',
+    flexShrink:'1',
+    flexBasis:'auto',
+    width:'auto',
+    height:'auto',
+  };
+  cache.fvi = {
+    ...cache.fhi,
+    flexShrink:'0',
+  };
+  cache.fgi = {
+    ...cache.fhi,
+  };
+
 
   return getCachedOrParseThenCache;
 })();
@@ -393,12 +391,6 @@ export const pstyl = (...inputs)=>sconfig.merge(mergeInputs(...inputs));;
 //   onComponent:globalConfig.propsPassed
 // });
 
-/**
- * list style shorthands
- */
-export const [v,h,g] = ['lVertical','lHorizontal','lGrid'].map(s=>styl(listStyles[s],'tSans'));
-export const [vi,hi,gi] = ['lVerticalItem','lHorizontalItem','lGridItem'].map(s=>styl(listStyles[s],'tSans'));
-// export const [stylvi,stylhi,stylgi] = ['lVerticalItem','lHorizontalItem','lGridItem'].map(s=>styl(listStyles[s],'tSans'));
 // wireframe item shorthands
 // export const [wfvi,wfhi,wfgi] = [
 //   ['BLUE','lVerticalItem'],['RED','lHorizontalItem'],['DARKGREEN','lGridItem']

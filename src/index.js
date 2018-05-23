@@ -16,7 +16,8 @@ import {pipe,compose,plog,ensureArray, mx, ma, get, cond,stubNull,isUndefined,ro
 import {of$,combine$,map,debug,debounce,dropRepeats,flatMap,sampleCombine} from './lib/utils$.js';
 import {getModalComponent,getModalHOC} from './lib/modal.js';
 // plus a few shorthands for vertical, horizontal, and grid style flexbox HOCs
-import {v,h,g,vi,hi,gi,styl,stylSet,stylRemove} from './lib/styles.js';
+import {styl} from './lib/styles.js';
+
 
 import {repos$,to_repo_devcost$, to_repo_changetime$,
   from_target_value,repoNodes_by_repoid$,repoNodes$,repos_id$,repoNodeOutEdges$,
@@ -42,9 +43,10 @@ import {ABOUT_HELP,REPO_URL_HELP,TIME_PER_CHANGE_HELP,CYCLOMATIC_HELP,MAINTAINAB
 
 
 // HOCs
-const withModal = getModalHOC();
 const c = withItemsHOCFactory({mapAllChildrenProps:pget(['data'])});
-const clog = name=>pipe(plog(name),stubNull);
+const [v,h,g,vi,hi,gi] = ['fv','fh','fg','fvi','fhi','fgi'].map(s=>styl(s+ ' tSans'));
+const withModal = getModalHOC();
+
 // utils
 const setProp = str=>(...Components)=>pipe(({[str]:data})=>({data}),toItemProps(...Components),flatten);
 export const setOwnProps = fn=>(...Components)=>pipe(fn,toItemProps(...Components),flatten);
@@ -97,7 +99,7 @@ const RepoUrlInput = TextInput(
   pipeChanges( pget({value:'target.value',data:'data'}),to_repo_url),
   h('t1em w100% b0 bb1x')
 );
-const RepoUrlContainer = Div(c(RepoUrlInput),h('lGrow1'));
+const RepoUrlContainer = Div(c(RepoUrlInput),h('fGrow1'));
 const RepoUrlHelpText = Span(c(REPO_URL_HELP),v('wsPL'));
 const RepoUrlHelpTrigger = Span(c(QMark),withModal(RepoUrlHelpText));
 const RepoUrlLabel = Label(c('GitHub Path'));
@@ -207,7 +209,7 @@ const MetricsBody = Div(
       ))
     )
   ),
-  g('minw400px w100% lAIC'),
+  g('minw400px w100% fAIC'),
 );
 
 
@@ -237,12 +239,12 @@ const MetricsParams = Div(
 );
 
 const FileMetrics = Div(c(cpipe(MetricsBody,MetricsParams)(vi('mb.5'))), v);
-const Repo = Div(c(cpipe(TreeSVG,Rules,FileMetrics)(hi('nth1mr1 nth2mr1'))),h('lAIStretch'));
+const Repo = Div(c(cpipe(TreeSVG,Rules,FileMetrics)(hi('nth1mr1 nth2mr1'))),h('fAIStretch'));
 const RepoList = Div(c(repos$.map(ma(pipe(pass_id(RepoHeader,Repo),ma(vi('mb.5 w100%')))))),v);
 
 // Header
 const AppLogo = Img(withProps({ src:logo, alt:'Cost Per Change Logo'}));
-const AppHeader = Header(c(hi('h80x')(AppLogo)), h('lAIC lJCC bgF w100%'));
+const AppHeader = Header(c(hi('h80x')(AppLogo)), h('fAIC fJCC bgF w100%'));
 
 const App = Div(c(cpipe(AppHeader,TokenArea,RepoList,getModalComponent())(vi('mb1 w100%'))),v);
 
