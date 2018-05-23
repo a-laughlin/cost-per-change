@@ -12,7 +12,7 @@ import {
   omit,ensureArray,plog,isNumber,isFalsy,stubNull,len0,len1,first,over,set,condNoExec,not,mapv,
   argsToArray,arrayToArgs,acceptsArgsOrArray,curry,isArray,unset,toEmptyCopy,isObservable,
   mapvToObjv,ensureFunction,constant,omitv,pipeAllArgsAsync,and,isProductionEnv,ifElse,has,every,ra,
-  partition,spread,pget,or,isPromise,isObjectLike,mo,unzip,zipObject
+  partition,spread,pget,or,isPromise,isObjectLike,mo,unzip,zipObject,last
 } from './utils';
 import {of$,from$,take,combine$,map,toArray,periodic$,flatMap as $flatMap,combineWith,
   flattenSequentially,flattenConcurrently,buffer,never$,addDebugListener,debug,
@@ -118,14 +118,17 @@ export const withItemsHOCFactory = (function() {
 // hoc(component)(props)
 // hoc(args)(component)(props)
 // hoc(args)(args)(component)(props)
+const customPrefix = 'customMerge';
 export const mergeableHocFactory = ({
   onArgs = (_merged,args)=>({...(_merged||{}),...args}),
   onComponent,
-  _merged
-}={})=>(...args)=>(
-  isComponent(args[0])
-    ? props=>Elem(args[0],onComponent(_merged,props))
-    : mergeableHocFactory({onArgs,onComponent,_merged:onArgs(_merged,...args)})
+  _merged,
+}={})=>(arg,...args)=>(
+  arg===customPrefix
+    ? mergeableHocFactory({onArgs,onComponent,_merged:args[0](_merged)})
+    : isComponent(arg)
+        ? props=>Elem(arg,onComponent(_merged,props))
+        : mergeableHocFactory({onArgs,onComponent,_merged:onArgs(_merged,arg,...args)})
 );
 
 
