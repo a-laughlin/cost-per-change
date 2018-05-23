@@ -41,20 +41,19 @@ const cache = {
   c:{},
 }
 
-const toLevelMappersDefault = ma(part=>(lvl,mapPath,preObserve)=>lvl.c[part]||(lvl.c[part]={
-  o:dpipe(lvl.o,map(parent=>mapPath(parent,lvl,part)),preObserve),
+const toLevelMappersDefault = ma(part=>(lvl,mapAllOutput)=>lvl.c[part]||(lvl.c[part]={
+  o:dpipe(lvl.o,map(parentLatest=>(lvl.c[part].latest = parentLatest[part])),mapAllOutput),
   latest:'',
   c:{}
 }));
-const mapPathDefault = (parent,lvl,part)=>(lvl.c[part].latest = parent[part]);
+const mapPathDefault = map(parent=>(lvl,part)=>(lvl.c[part].latest = parent[part]));
 export const getCached =({
-  mapOutput = identity,
-  mapPath = mapPathDefault,
+  mapAllOutput = identity,
   toLevelMappers = toLevelMappersDefault
 }={})=>pipe(
   ensureArray,
   toLevelMappers,
-  pm=>pm.reduce((lvl,fn)=>fn(lvl,mapPath,mapOutput),cache)
+  pm=>pm.reduce((lvl,fn)=>fn(lvl,mapAllOutput),cache)
 )
 
 const logCache = msg=>(output)=>{
@@ -77,7 +76,7 @@ const logCache = msg=>(output)=>{
 const logoutput = msg=>(out)=>(isObservable(out)?map:identity)(logCache(msg))(out);
 
 export const getCached$ = (args)=>pipe(getCached(args),({o})=>o);
-const getCachedUnique$ = getCached$({mapOutput:pipe(dropRepeats,remember)});
+const getCachedUnique$ = getCached$({mapAllOutput:pipe(dropRepeats,remember)});
 const parse$ = args=>pipe(split('.'),getCached(args));
 const parseUnique$ = pipe(split('.'),getCachedUnique$);
 export const tpltemp = (s,props)=>s.replace(/\[(.+?)\]/g,(_,key)=>`.${props[key]}.`);
