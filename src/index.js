@@ -9,22 +9,17 @@ import {schemeReds,scaleOrdinal,interpolateReds} from 'd3-scale-chromatic';
 
 import logo from './static/cost-per-change.png';
 import './static/index.css';
-import {pipe,compose,plog,ensureArray, mx, ma, get, cond,stubNull,isUndefined,round,sortBy,
+import {pipe,compose,plog,ensureArray, mx, ma, get,cond,stubNull,isUndefined,round,sortBy,ifenx,ife,
   fa, pget,reverse,slice,is,len,condNoExec as nxcond,matches,stubTrue,flatten,argsToArray,converge,
-  ifenx,ife
 } from './lib/utils.js';
 import {of$,combine$,map,debug,debounce,dropRepeats,flatMap,sampleCombine} from './lib/utils$.js';
 import {getModalComponent,getModalHOC} from './lib/modal.js';
 // plus a few shorthands for vertical, horizontal, and grid style flexbox HOCs
 import {styl} from './lib/styles.js';
+import {cache$,pcache$} from './lib/dataflow-cache.js';
 
-
-import {repos$,to_repo_devcost$, to_repo_changetime$,
-  from_target_value,repoNodes_by_repoid$,repoNodes$,repos_id$,repoNodeOutEdges$,
-  userToken$, to_userToken$,to_repo_copy,to_repo_remove,to_repo_url,repoNodeOutEdges_by_repoid$,
-  repoNodes_costPerChange$,repoNodes_userImpact$,repos_by_repoNode_id$,pipeCollection,
-  repoNodes_path$,nodeAnalyses$,nodeAnalyses_by_repoid$,get$,d3TreeStructure_by_repoid$,
-  analysisMods_by_repoid$, to_analysisMods_devcost, to_analysisMods_changetime,
+import {toStore,repoNodes$,to_repo_copy,to_repo_remove,to_repo_url, nodeAnalyses$,
+  repoNodeOutEdges_by_repoid$, nodeAnalyses_by_repoid$,d3TreeStructure_by_repoid$,
 } from './dataflow.js';
 
 import {Circle,Text,Div,Span,Img,H1,Input,A,Label,Svg,TextInput,Button,Header,Pre,P,toItemProps,
@@ -34,12 +29,6 @@ import {Circle,Text,Div,Span,Img,H1,Input,A,Label,Svg,TextInput,Button,Header,Pr
 // data imports
 import {ABOUT_HELP,REPO_URL_HELP,TIME_PER_CHANGE_HELP,CYCLOMATIC_HELP,MAINTAINABILITY_HELP,EFFORT_HELP} from './static/help-messages.js';
 
-// things for a talk
-// explain Div()
-// explain each of the basic HOCs
-// every element's children are a list of other elements, or a string
-// show a sidebar with the definitions for each part
-// only one type
 
 
 // HOCs
@@ -49,9 +38,9 @@ const withModal = getModalHOC();
 
 // utils
 const setProp = str=>(...Components)=>pipe(({[str]:data})=>({data}),toItemProps(...Components),flatten);
-export const setOwnProps = fn=>(...Components)=>pipe(fn,toItemProps(...Components),flatten);
-
-const idx = idxMapFactory();
+const setOwnProps = fn=>(...Components)=>pipe(fn,toItemProps(...Components),flatten);
+const from_target_value = pget({value:'target.value',data:'data'});
+const idx = idxMapFactory(); // can be replaced by pcache eventually
 const pass_id = setOwnProps(pget({data:'id'}));
 const pass_repoid = setOwnProps(pget({data:'repoid'}));
 const cpipe = (...Components)=>(...fns)=>converge(Components.map(C=>pipe(...fns)(C)));
@@ -66,15 +55,14 @@ const scaleRed = getRedGenerator(0,4);
 const QMark = Span(c('?'),h('crP peN usN t.4 lh1.3 tcC pl.3 pr.3 b1x bS brad50% bcC ml.5 mr.5'));
 
 
-
 // User / Info Section
 const Token_input = TextInput(
-  pipeChanges(pget({value:'target.value',data:'data'}),to_userToken$),
+  pipeChanges(from_target_value,toStore('userTokens.0.value')),
   // why, if I reverse these 2 hget$s, or move the style one to the parent, does the style start
   // lagging one action behind?  keeping them in this order, or setting them both on the same
   // hget$ fixes the issue. However, contextual styles control belongs to containers
-  hget$({defaultValue:userToken$}),
-  hget$({style:userToken$.map(ifenx(len(40),{},{border:'1px solid red'}))}),
+  hget$({defaultValue:cache$('userTokens.0.value')}),
+  hget$({style:cache$('userTokens.0.value').map(ifenx(len(40),{},{border:'1px solid red'}))}),
   h('w40 b0 bb1x bcD t0.7')
 );
 const Token_input_wrap = Div(c(Token_input));
@@ -95,8 +83,8 @@ const TokenArea = Div(
 
 // Repo Header
 const RepoUrlInput = TextInput(
-  hget$({defaultValue:idx(repos$,'url')}),
-  pipeChanges( pget({value:'target.value',data:'data'}),to_repo_url),
+  hget$({defaultValue:pcache$('repos[data].url')}),
+  pipeChanges( from_target_value,to_repo_url),
   h('t1em w100% b0 bb1x')
 );
 const RepoUrlContainer = Div(c(RepoUrlInput),h('fGrow1'));
@@ -178,7 +166,7 @@ const PathHeader = Span(c('Path'));
 
 const Cell_cpc = Span(c(idx(nodeAnalyses$,'costPerChange',round)));
 const Cell_usr_imp = Span(c(idx(nodeAnalyses$,'userImpact',round)));
-const Cell_path = Span(c(idx(repoNodes$,'path',p=>p.replace(/^.+\//g,''))));
+const Cell_path = Span(c(idx(cache$('repoNodes'),'path',p=>p.replace(/^.+\//g,''))));
 const Cell_rules_imp = Div(c(pipe(
   idx(nodeAnalyses$), dropRepeats, map((node)=>{
     const styles = ([// should generate these based on selected rules, but select/deselect nodes isn't implemented yet
@@ -213,11 +201,10 @@ const MetricsBody = Div(
 );
 
 
-
 // Dev Cost and Time Per Change Adjustments
 const DevCostPerHour = Input(
-  hget$({defaultValue:idx(analysisMods_by_repoid$,'devcost')}),
-  pipeChanges(from_target_value,to_analysisMods_devcost),
+  hget$({defaultValue:pcache$('analysisMods[data].devcost')}),
+  pipeChanges(from_target_value,toStore('analysisMods.prop.devcost')),
   h('w3 t0.8')
 );
 const DCtxt = Span(c(`Developer Hourly Rate, to calculate cost per change.`),v('wsPL'));
@@ -225,8 +212,8 @@ const DChelp = Span(c(QMark),withModal(DCtxt));
 const DClabel = Label(c('Dev Hourly Cost'),h('t0.8'));
 
 const TimePerChange = TextInput(
-  hget$({defaultValue:idx(analysisMods_by_repoid$,'changetime')}),
-  pipeChanges(from_target_value,to_analysisMods_changetime),
+  hget$({defaultValue:pcache$('analysisMods[data].changetime')}),
+  pipeChanges(from_target_value,toStore('analysisMods.prop.changetime')),
   h('w3 t0.8')
 );
 const TPCtxt = Span(c(TIME_PER_CHANGE_HELP),v('wsPL'));
@@ -240,7 +227,7 @@ const MetricsParams = Div(
 
 const FileMetrics = Div(c(cpipe(MetricsBody,MetricsParams)(vi('mb.5'))), v);
 const Repo = Div(c(cpipe(TreeSVG,Rules,FileMetrics)(hi('nth1mr1 nth2mr1'))),h('fAIStretch'));
-const RepoList = Div(c(repos$.map(ma(pipe(pass_id(RepoHeader,Repo),ma(vi('mb.5 w100%')))))),v);
+const RepoList = Div(c(cache$('repos').map(ma(pipe(pass_id(RepoHeader,Repo),ma(vi('mb.5 w100%')))))),v);
 
 // Header
 const AppLogo = Img(withProps({ src:logo, alt:'Cost Per Change Logo'}));

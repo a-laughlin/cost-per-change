@@ -236,6 +236,13 @@ export const hget$ = compose(mapPropsStream,$flatMap,$get);
 //  typing becomes important - the collections get too complex to hold in your head
 
 
+// things for a talk
+// explain Div()
+// explain each of the basic HOCs
+// every element's children are a list of other elements, or a string
+// show a sidebar with the definitions for each part
+// only one type
+//
 
 // changeability & reliability FTW
 //   - minimizing dependency graphs

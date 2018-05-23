@@ -12,21 +12,10 @@ import {of$,from$,combine$,map,debug,debounce,from,combineWith,flatten,flattenCo
   removeListener,getListener,subscribe,fold,drop,periodic$,takeWhenPropChanged,filter,
   ensureObservable,remember,flattenDeep,fromPromise$,collection$
 } from './lib/utils$.js';
+import {initCache,cache$,tpl} from './lib/dataflow-cache.js'
 import {analyse} from './analyse';
 import {loadRepoGraph} from './api'
 import {initialState} from './static/initial-state';
-
-
-
-
-export const from_target_value = pget({value:'target.value',data:'data'});
-
-const getHandler = (...fns)=>{
-  const {stream,handler} = createEventHandler();
-  pipe( ...fns, addListener() )(stream);
-  return handler;
-};
-
 
 
 initialState.userTokens['0'].value = process.env.REACT_APP_GITHUB_TOKEN;
@@ -34,126 +23,20 @@ const tapUpdater = updater=>pipe(plog('prevState'),updater,plog('nextState'));
 const store = createStore((state,{updater=identity})=>tapUpdater(updater)(state),initialState);
 const store$ = from$(store[Symbol.observable]()).remember();
 const dispatch = store.dispatch.bind(store);
-
-const cache = {
-  o:store$,
-  latest:initialState,
-  c:{},
-}
-
-const toLevelMappersDefault = ma(part=>(lvl,mapAllOutput)=>lvl.c[part]||(lvl.c[part]={
-  o:dpipe(lvl.o,map(parentLatest=>(lvl.c[part].latest = parentLatest[part])),mapAllOutput),
-  latest:'',
-  c:{}
-}));
-const mapPathDefault = map(parent=>(lvl,part)=>(lvl.c[part].latest = parent[part]));
-export const getCached =({
-  mapAllOutput = identity,
-  toLevelMappers = toLevelMappersDefault
-}={})=>pipe(
-  ensureArray,
-  toLevelMappers,
-  pm=>pm.reduce((lvl,fn)=>fn(lvl,mapAllOutput),cache)
-)
-
-const logCache = msg=>(output)=>{
-  console.log(msg,`output`, output);
-  const inner = (lvl=cache,mapped={})=>{
-    if(!isPlainObject(lvl.latest)){return lvl.latest;}
-    if(lvl._){
-      mapped._ = mo(ife(isString),identity,v=>typeof v)(lvl._.latest);
-    }
-    let k;
-    for(k in lvl.c){
-      mapped[k]=inner(lvl.c[k]);
-    }
-    return mapped;
-  };
-  console.log(msg,`cache`, JSON.stringify(inner(cache),null,1));
-  console.log(msg,`raw cache`, cache);
-  return output;
-}
-const logoutput = msg=>(out)=>(isObservable(out)?map:identity)(logCache(msg))(out);
-
-export const getCached$ = (args)=>pipe(getCached(args),({o})=>o);
-const getCachedUnique$ = getCached$({mapAllOutput:pipe(dropRepeats,remember)});
-const parse$ = args=>pipe(split('.'),getCached(args));
-const parseUnique$ = pipe(split('.'),getCachedUnique$);
-export const tpltemp = (s,props)=>s.replace(/\[(.+?)\]/g,(_,key)=>`.${props[key]}.`);
-export const pcacheOne$ = (str)=>pipe( props=>tpltemp(str,props).split('.'), getCachedUnique$);
-export const pcache$ = (...strs)=>props=>{
-  return strs.length===0
-    ? of$(undefined)
-    : strs.length > 1
-      ? combine$(...strs.map(s=>pcacheOne$(s)(props)))
-      : pcacheOne$(strs[0])(props);
-};
-
-
-export const [
-  repos$, repoNodes$, repoNodeOutEdges$, userTokens$, analysisMods$,
-] = ['repos','repoNodes','repoNodeOutEdges','userTokens','analysisMods']
-.map(getCachedUnique$);
-
-// these are the only events to handle!!
-// collections
-// collections items adding
-// collections items removing
-// collection item props updating
-
-// why? managing state updates, observerable updates, combining streams, is challgenging to get right
-// inspired by mobx and redux, more fp, opinionated state structure
-// const idxget$('repos','repo0','url');
-// how dynamically create indices?
-// (edit: see the getLevelMapper fn - enables handling on a per-part basis)
-// const idx$ = parse$({mapOutput:pipe(fold(),drop(1),dropRepeats,remember)})
-  // ('repNodes',get()by.repos.[repoid]')
-
-// dpipe(
-//   cache$('repoNodeOutEdges.data.edges')({data:'repo0_root'}),
-//   logoutput('repoNodeOutEdges.data.edges.0'),
-//   addDebugListener
-// );
+const cache = initCache(store$,initialState); // Cache only auto-reads store. No mutations.
 
 
 
 
-
-
-
-
-
-
-// data is props.data
-const tplRegex = /\[prop\]\.|\.?prop\./g;
-const tpl = string=>data=>string.replace(tplRegex,`[${data}].`);
-const setStateX = str=>({value,data=''})=>{dispatch({type:'fn',updater:state=>set(tpl(str)(data),value,state)}); return value; };
-const assignToStateX = data=>{
-  dispatch({type:'fn',updater:state=>Object.assign({},state,...ensureArray(data))});
-  return data;
-}
-
-// assumes collections will not be added or removed
-// assumes collection items will be added and removed
-
-
-export const to_repos$ = setStateX('repos');
-export const to_repo_url$ = setStateX('repos.prop.url');
-
-export const analysisMods_by_repoid$ = analysisMods$;
-export const to_analysisMods_devcost = setStateX('analysisMods.prop.devcost')
-export const to_analysisMods_changetime = setStateX('analysisMods.prop.changetime')
-
-// files/directory nodes
-export const to_repoNodes$ = setStateX('repoNodes');
-
-
-// user github token
-export const userToken$ = parseUnique$('userTokens.0.value');
-export const to_userToken$ = setStateX('userTokens.0.value');
+/**
+  Derived Collections
+  (eventually migrate to cache$ once it supports them)
+**/
+export const [repos$, repoNodes$, repoNodeOutEdges$, userTokens$, analysisMods$] = [
+      'repos','repoNodes','repoNodeOutEdges','userTokens','analysisMods'].map(s=>cache$(s));
 
 export const codeAnalysesRaw$ = dpipe(
-  repoNodes$,
+  cache$('repoNodes'),
   fold((prevAnalyses,repoNodes)=>{
     let changes = 0,nextLen=0;
     const analyses = mo((n,id)=>{
@@ -168,9 +51,9 @@ export const codeAnalysesRaw$ = dpipe(
   remember,
 );
 
-
+// Derived Collections
 export const nodeAnalyses$ = dpipe(
-  combine$(codeAnalysesRaw$,analysisMods_by_repoid$),
+  combine$(codeAnalysesRaw$,analysisMods$),
   sampleCombine(repoNodes$),
   fold((prevAnalyses,[[analyses,mods],repoNodes])=>{
     const repoData = {costPerChangeMax:0,costPerChangeMin:Infinity};
@@ -206,18 +89,6 @@ export const nodeAnalyses$ = dpipe(
   remember,
 );
 
-// joins
-// export const repos_by_repoNode_id$ = store$
-export const repos_by_repoNode_id$ = dpipe(
-  combine$(repos$,repoNodes$),
-  map(([r,nodes])=>mapv(n=>r[n.repoid])(nodes)),
-  remember,
-);
-
-export const repoNodes_by_repoid$ = pipe(map(groupByKey('repoid')), remember )(repoNodes$);
-export const nodeAnalyses_by_repoid$ = pipe(map(groupByKey('repoid')), remember )(nodeAnalyses$);
-export const repoNodeOutEdges_by_repoid$ = pipe(map(groupByKey('repoid')), remember )(repoNodeOutEdges$)
-
 export const d3TreeStructure_by_repoid$ = pipe(
   ()=>repoNodeOutEdges$,
   sampleCombine(repoNodes$),
@@ -243,7 +114,60 @@ export const d3TreeStructure_by_repoid$ = pipe(
 )();
 
 
-// multi-actions
+
+
+
+/**
+  Joins
+  (eventually migrate to cache$ once it supports them)
+**/
+export const repos_by_repoNode_id$ = dpipe(
+  combine$(repos$,repoNodes$),
+  map(([r,nodes])=>mapv(n=>r[n.repoid])(nodes)),
+  remember,
+);
+
+export const repoNodes_by_repoid$ = pipe(map(groupByKey('repoid')), remember )(repoNodes$);
+export const nodeAnalyses_by_repoid$ = pipe(map(groupByKey('repoid')), remember )(nodeAnalyses$);
+export const repoNodeOutEdges_by_repoid$ = pipe(map(groupByKey('repoid')), remember )(repoNodeOutEdges$)
+
+
+
+
+
+
+/**
+  Store Updating Utils (simple state shape ftw)
+  cases are:
+  collections item props updating one - toStore
+  collections item props updating many - assignToState
+  collections items removing (one,many) - assignToState
+  collections items adding (one, many) - assignToState
+
+  Collections are defined in initialState, so no need to add/remove those from store.
+
+  exporting toStore because indirection only adds complexity when setting single props
+  not exporting assignToStore. data logic in components increases coupling and complexity
+    ... use getHandler for that
+**/
+export const toStore = str=>({value,data=''})=>{
+  dispatch({type:'fn',updater:state=>set(tpl(str,{data}),value,state)}); return {value,data};};
+
+const assignToStore = data=>{dispatch({type:'fn',updater:state=>Object.assign({},state,...ensureArray(data))});}
+
+const getHandler = (...fns)=>{ // for more complex action creators
+  const {stream,handler} = createEventHandler();
+  pipe( ...fns, addListener() )(stream);
+  return handler;
+};
+
+
+
+
+/**
+  Store Updaters
+**/
+
 export const to_repo_copy = getHandler(
   sampleCombine(repos$,repoNodes$,repoNodeOutEdges$,analysisMods$),
   map(([id,repos,repoNodes,repoNodeOutEdges,mods])=>{
@@ -261,7 +185,7 @@ export const to_repo_copy = getHandler(
         if(v.edges){acc[fid].edges=v.edges.map(sRepo);}
       };
     };
-    assignToStateX({
+    assignToStore({
       repos:ro(transformRepo)(repos),
       repoNodes:ro(transformNode)(repoNodes),
       analysisMods:ro(transformMods)(mods),
@@ -273,7 +197,7 @@ export const to_repo_copy = getHandler(
 export const to_repo_remove = getHandler(
   sampleCombine(repos$,repoNodes$,repoNodeOutEdges$,analysisMods$),
   map(([id,repos,repoNodes,repoNodeOutEdges,mods])=>{
-    assignToStateX({
+    assignToStore({
       repos:omitv(matches({id}))(repos),
       repoNodes:omitv(matches({repoid:id}))(repoNodes),
       analysisMods:omitv(matches({id}))(mods),
@@ -281,11 +205,12 @@ export const to_repo_remove = getHandler(
     });
   })
 );
-// export const to_repo_url= setStateX('repos.prop.url');
+
+
 export const to_repo_url = getHandler(
   debounce(500),
   filter(({value})=>!!value),
-  sampleCombine(repos$,repoNodes$,repoNodeOutEdges$,userToken$),
+  sampleCombine(repos$,repoNodes$,repoNodeOutEdges$,cache$('userTokens.0.valueZ')),
   map(([props,allRepos,allrepoNodes,allRepoNodeOutEdges,token])=>{
     const {data:id,value:url} = props;
     console.log(`requesting`,{url,id,token});
@@ -299,7 +224,7 @@ export const to_repo_url = getHandler(
       // console.log(`omittedNodes`, omittedNodes);
       const repoNodeOutEdges = {...omitv(matches({repoid:id}))(allRepoNodeOutEdges),...newEdges};
       const repoNodes = {...omitv(matches({repoid:id}))(allrepoNodes), ...newNodes};
-      assignToStateX({repos,repoNodes,repoNodeOutEdges})
+      assignToStore({repos,repoNodes,repoNodeOutEdges})
     });
   })
 );
