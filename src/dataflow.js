@@ -1,25 +1,21 @@
 import {createStore} from 'redux';
 import {hierarchy} from 'd3';
-import {setObservableConfig,createEventHandler,mapPropsStream,componentFromStream,shallowEqual} from 'recompose';
-import {
-  pipe,compose,mapv,plog,get as _get,identity,pget,pgetv,ensureArray,set,isObservable,assignAll,
-  mapvToArr,isFunction,ensureFunction,groupByKey,ife,isString,cond,stubTrue,
-  omitv,matches,fltrvToObj,isPlainObject,isNumber,ro,unzip,zipObject,mo,isArray,fa,fo,pick,isObjectLike,
-  every,not,isUndefOrNull,isPromise,or,partition,ma,spread,get,dpipe,ifenx,is,split,ra,argsToArray
-} from './lib/utils';
-import {of$,from$,combine$,map,debug,debounce,from,combineWith,flatten,flattenConcurrently,flattenSequentially,addListener,
-  addDebugListener,setDebugListener,dropRepeats,flatMapLatest,flatMap,sampleCombine,getDebugListener,
-  removeListener,getListener,subscribe,fold,drop,periodic$,takeWhenPropChanged,filter,
-  ensureObservable,remember,flattenDeep,fromPromise$,collection$
-} from './lib/utils$.js';
+import {createEventHandler} from 'recompose';
+import {pipe,identity,ensureArray,set,groupByKey,ox,matches,isNumber,ro,mo,fa,fo,ma,dpipe} from './lib/utils';
+import {from$,combine$,map,debounce,from,addListener,dropRepeats,sampleCombine,fold,drop,filter,remember} from './lib/utils$.js';
 import {initCache,cache$,tpl} from './lib/dataflow-cache.js'
 import {analyse} from './analyse';
 import {loadRepoGraph} from './api'
 import {initialState} from './static/initial-state';
 
 
+
+/**
+  State Setup
+**/
 initialState.userTokens['0'].value = process.env.REACT_APP_GITHUB_TOKEN;
-const tapUpdater = updater=>pipe(plog('prevState'),updater,plog('nextState'));
+const tapUpdater = identity
+// const tapUpdater = updater=>pipe(plog('prevState'),updater,plog('nextState'));
 const store = createStore((state,{updater=identity})=>tapUpdater(updater)(state),initialState);
 const store$ = from$(store[Symbol.observable]()).remember();
 const dispatch = store.dispatch.bind(store);
@@ -65,7 +61,7 @@ export const nodeAnalyses$ = dpipe(
       const {analysis, code} = analyses[nodeid];
       const n = {...node,code};
 
-      mapv((v,k)=>{
+      mo((v,k)=>{
         if(!isNumber(v)){return;}
         minKey = `${k}Min`;
         maxKey = `${k}Max`;
@@ -123,7 +119,7 @@ export const d3TreeStructure_by_repoid$ = pipe(
 **/
 export const repos_by_repoNode_id$ = dpipe(
   combine$(repos$,repoNodes$),
-  map(([r,nodes])=>mapv(n=>r[n.repoid])(nodes)),
+  map(([r,nodes])=>mo(n=>r[n.repoid])(nodes)),
   remember,
 );
 
@@ -198,10 +194,10 @@ export const to_repo_remove = getHandler(
   sampleCombine(repos$,repoNodes$,repoNodeOutEdges$,analysisMods$),
   map(([id,repos,repoNodes,repoNodeOutEdges,mods])=>{
     assignToStore({
-      repos:omitv(matches({id}))(repos),
-      repoNodes:omitv(matches({repoid:id}))(repoNodes),
-      analysisMods:omitv(matches({id}))(mods),
-      repoNodeOutEdges:omitv(matches({repoid:id}))(repoNodeOutEdges),
+      repos:ox(matches({id}))(repos),
+      repoNodes:ox(matches({repoid:id}))(repoNodes),
+      analysisMods:ox(matches({id}))(mods),
+      repoNodeOutEdges:ox(matches({repoid:id}))(repoNodeOutEdges),
     });
   })
 );
@@ -220,10 +216,10 @@ export const to_repo_url = getHandler(
       let maxKey,minKey;
       const repo = {...allRepos[id],url}; // add url
       const repos = {...allRepos,[id]:repo};
-      // const omittedNodes = omitv(matches({repoid:id}))(allrepoNodes);
+      // const omittedNodes = ox(matches({repoid:id}))(allrepoNodes);
       // console.log(`omittedNodes`, omittedNodes);
-      const repoNodeOutEdges = {...omitv(matches({repoid:id}))(allRepoNodeOutEdges),...newEdges};
-      const repoNodes = {...omitv(matches({repoid:id}))(allrepoNodes), ...newNodes};
+      const repoNodeOutEdges = {...ox(matches({repoid:id}))(allRepoNodeOutEdges),...newEdges};
+      const repoNodes = {...ox(matches({repoid:id}))(allrepoNodes), ...newNodes};
       assignToStore({repos,repoNodes,repoNodeOutEdges})
     });
   })
