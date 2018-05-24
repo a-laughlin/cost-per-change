@@ -191,7 +191,7 @@ export const simpleStore = (initialState={})=>{
 
 export const $get = cond(
   // ordering based on lodash source code, for minimum checks
-  [or(isString,isNumber),s=>props=>of$(s)],
+  [or(isString,isNumber),s=>props=>of$((s in props)?props[s]:s)],
   [isObservable,obs$=>props=>obs$],
   [isArray,arr=>props=>combine$(of$(props),...arr.map(v=>$get(v)(props)))],
   [isFunction, fn=>props=>$get(fn(props))(props)],
