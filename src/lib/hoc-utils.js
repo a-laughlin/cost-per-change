@@ -20,33 +20,14 @@ import {of$,from$,take,combine$,map,toArray,periodic$,flatMap as $flatMap,combin
 } from './utils$.js';
 
 
-// reference https://medium.com/@leathcooper/roll-your-own-provider-and-connect-with-recompose-ceb73ba29dd3
-// "it’s important to note that the component wrapped by withContext should render it’s children"
-
-
 /**
  * HTML Node names as HOC composers e.g., Div(...HOCs)
- * - encourages single, composable nodes
- * - discourages nested (i.e., coupled) nodes (HOC composers don't nest) #pitOfSuccess
- * - Makes HOC composition easy
- * - hides React's rule about lowercased strings being valid components.
- *
  * these are identical:
  * - const Div = toHOCComposer('div');
  * - const Div = (...fns)=>compose(...fns)('div')
  */
 
-// React should not warn about invalid data props, but it currently does.
-// https://reactjs.org/blog/2017/09/08/dom-attributes-in-react-16.html#data-and-aria-attributes
-// However, this is not a use case they want to support at this time, so making a workaround
-// https://github.com/facebook/react/issues/12614
-let omitHOCHandlerFns = identity;
-if(!isProductionEnv()){
-  const invalidPropFilter = omitv(and(isFunction,(v,k)=>k.startsWith('data-')));
-  omitHOCHandlerFns = str=>props=>Elem(str,invalidPropFilter(props));
-}
-
-export const toHOCComposer = (str)=>(...fns)=>compose(...fns,omitHOCHandlerFns)(str);
+export const toHOCComposer = (str)=>(...fns)=>compose(...fns)(str);
 export const [Div,Span,Ul,Ol,Dt,Dd,Dl,Article,P,H1,H2,H3,H4,H5,H6,Li,Input,A,Label,Pre,Textarea,Button,Img,Header,Svg,G,Path,Circle,Text,Table,Td,Th,Tr] = (
   'div,span,ul,ol,dt,dd,dl,article,p,h1,h2,h3,h4,h5,h6,li,input,a,label,pre,textarea,button,img,header,svg,g,path,circle,text,table,td,th,tr'
   .split(',').map(toHOCComposer));
@@ -63,12 +44,12 @@ export const isComponent = c =>(isFunction(c)||isComponentString(c));
  */
 
  /**
- * withItems Factory
+ * childrenHOCFactory
  * creates a flatted array of React elements from anything
  * see the xToElements for 'anything'
  * sets keys when needed
  */
-export const withItemsHOCFactory = (function() {
+export const childrenHOCFactory = (function() {
   const hasKey = elem=>elem.key !== null;
   const cloneWithKey = (elem,key)=>cloneElement(elem,{key});
   const ensureKeys = ifElse(not(hasKey),cloneWithKey);
@@ -135,8 +116,8 @@ export const mergeableHocFactory = ({
 /**
  * HOCs
  */
-export const withItems = withItemsHOCFactory();
-export const withItemsAllProps = withItemsHOCFactory({mapAllChildrenProps:identity});
+export const withItems = childrenHOCFactory();
+export const withItemsAllProps = childrenHOCFactory({mapAllChildrenProps:identity});
 
 
 
@@ -233,16 +214,17 @@ export const hget$ = compose(mapPropsStream,$flatMap,$get);
 //  set directly to state
 //  business logic - on components (only one add todo button, why not?, the architecture makes it dead simple to move later)
 // phases (prototyping +1)
+//  team communication
 //  typing becomes important - the collections get too complex to hold in your head
 
 
 // things for a talk
 // explain Div()
-// explain each of the basic HOCs
-// every element's children are a list of other elements, or a string
+// explain each of the basic HOCs - show simple example of how each is used.
 // show a sidebar with the definitions for each part
 // only one type
-//
+// explain fns are often one-lieners
+// almost never dependencies between them.
 
 // changeability & reliability FTW
 //   - minimizing dependency graphs
@@ -272,7 +254,12 @@ export const hget$ = compose(mapPropsStream,$flatMap,$get);
 // minimal streams
 
 
-
+/**
+ * HTML Node names as HOC composers e.g., Div(...HOCs)
+ * - encourages single, composable nodes
+ * - discourages nested (i.e., coupled) nodes (HOC composers don't nest) #pitOfSuccess
+ * - cons... many, but the tradeoffs are worth it
+ */
 
 
 

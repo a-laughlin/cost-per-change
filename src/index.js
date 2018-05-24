@@ -10,7 +10,7 @@ import {schemeReds,scaleOrdinal,interpolateReds} from 'd3-scale-chromatic';
 import logo from './static/cost-per-change.png';
 import './static/index.css';
 import {pipe,compose,plog,ensureArray, mx, ma, get,cond,stubNull,isUndefined,round,sortBy,ifenx,ife,
-  fa, pget,reverse,slice,is,len,condNoExec as nxcond,matches,stubTrue,flatten,argsToArray,converge,
+  fa, pget,reverse,slice,is,len,matches,stubTrue,flatten,argsToArray,converge,
 } from './lib/utils.js';
 import {of$,combine$,map,debug,debounce,dropRepeats,flatMap,sampleCombine} from './lib/utils$.js';
 import {getModalComponent,getModalHOC} from './lib/modal.js';
@@ -23,7 +23,7 @@ import {toStore,repoNodes$,to_repo_copy,to_repo_remove,to_repo_url, nodeAnalyses
 } from './dataflow.js';
 
 import {Circle,Text,Div,Span,Img,H1,Input,A,Label,Svg,TextInput,Button,Header,Pre,P,toItemProps,
-  withItemsHOCFactory, pipeClicks, pipeChanges,hget$,idxMapFactory
+  childrenHOCFactory, pipeClicks, pipeChanges,hget$,idxMapFactory
 } from './lib/hoc-utils.js';
 
 // data imports
@@ -32,7 +32,7 @@ import {ABOUT_HELP,REPO_URL_HELP,TIME_PER_CHANGE_HELP,CYCLOMATIC_HELP,MAINTAINAB
 
 
 // HOCs
-const c = withItemsHOCFactory({mapAllChildrenProps:pget(['data'])});
+const c = childrenHOCFactory({mapAllChildrenProps:pget(['data'])});
 const [v,h,g,vi,hi,gi] = ['fv','fh','fg','fvi','fhi','fgi'].map(s=>styl(s+ ' tSans'));
 const withModal = getModalHOC();
 
