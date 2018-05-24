@@ -3,12 +3,24 @@ import {
 } from './utils.js'
 import { map,dropRepeats,remember,of$,combine$,throw$ } from './utils$.js'
 
-// inspired by mobx and redux, but more fp and immutable,
-// not opinionated about state structure
-// Does not handle state updating - only reads updates from store.
-// its like a diffing engine, like react, but not bound to dom components.
-// why? managing state updates, observerable updates, combining streams, is challgenging to get right
-// Cache auto-reads store and renders updateswhen dependencies change.
+/***
+Are there any libs which fill the gap between the observable redux store, and React component integration, in a similar way to Mobx?
+
+store$ -> `   ---gap---    ` -> React Component Integration
+
+Scope is small... something like:
+
+- creating observables from collections in initialState object
+- enabling manual creation of derived collections
+- efficiently pushing updates for all collections to observables
+
+Ideally, something which is truly functional, thus works with compose/pipe operators from other libs.  Like 3 functions. Initialize State, Observe, and Derive.
+
+Note: The scope intentionally excludes:
+
+- Updating the store. Redux, Mobx, and many other solutions already provide options for that.
+- Wiring observables into components.  Functions like Recompose's [mapPropsStream](https://github.com/acdlite/recompose/blob/master/docs/API.md#mappropsstream)) already handle that.
+**/
 
 
 // initialization
