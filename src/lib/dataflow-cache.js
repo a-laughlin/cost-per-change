@@ -1,5 +1,5 @@
 import {
-  ma,dpipe,identity,ensureArray,isObservable,split,pipe,isPlainObject,mo,ife,isString,
+  ma,dpipe,identity,ensureArray,isObservable,split,pipe,isObjectLike,mo,ife,isString,
 } from './utils.js'
 import { map,dropRepeats,remember,of$,combine$,throw$ } from './utils$.js'
 
@@ -22,87 +22,52 @@ Note: The scope intentionally excludes:
 - Wiring observables into components.  Functions like Recompose's [mapPropsStream](https://github.com/acdlite/recompose/blob/master/docs/API.md#mappropsstream)) already handle that.
 **/
 
+export const initCache2 = function(store$,initialState={}){
+  // for O(1) lookups after first reference (and simpler debugging initially)
+  const cacheRoot = { o:store$, c:{}, path:'' };
+  const pathIndex = {'':cacheRoot};
 
-// initialization
-let cache; // temporary to get this code out of the dataflow file.  Needs a real api.
-export const initCache = function(store$,initialState){
-  cache = {
-    o:store$,
-    latest:initialState,
-    c:{},
+  const setSingleParent = (path='',parentPath='',fn=pipe(map(v=>v[path]),dropRepeats,remember))=>{
+    const childPath = parentPath+path;
+    if(pathIndex[childPath]){return pathIndex[childPath];}
+    const parent = pathIndex[parentPath];
+    return pathIndex[childPath] = parent.c[path] = {
+      o:fn(parent.o).map(v=>pathIndex[childPath].debug=v),// debugging
+      path:childPath,
+      parents:[parentPath],
+      c:{}
+    };
   };
-  return cache;
-};
-
-
-
-
-// All the main logic - 2 functions
-export const toLevelMappersDefault = ma(part=>(lvl,mapAllOutput)=>lvl.c[part]||(lvl.c[part]={
-  o:dpipe(lvl.o,map(parentLatest=>(lvl.c[part].latest = parentLatest[part])),mapAllOutput),
-  latest:'',
-  c:{}
-}));
-const getCached = ({
-  mapAllOutput = identity,
-  toLevelMappers = pipe(ensureArray,toLevelMappersDefault)
-}={})=>pipe(
-  toLevelMappers,
-  lm=>lm.reduce((lvl,fn)=>fn(lvl,mapAllOutput),cache)
-)
-
-
-
-// api experiments
-// low level
-export const getCached$ = (args)=>pipe(getCached(args),({o})=>o);
-export const getCachedUnique$ = getCached$({mapAllOutput:pipe(dropRepeats,remember)});
-
-
-
-// higher level
-export const cache$ = (...strs)=>{
-  return strs.length===0
-    ? throw$('NO STRINGS PASSED TO CACHE')
-    : strs.length > 1
-      ? combine$(...strs.map(s=>getCachedUnique$(s.split('.'))))
-      : getCachedUnique$(strs[0].split('.'));
-};
-
-
-
-// for use in react components
-const tplRegex = /\[(.+?)\]\.|\.(.+?)\./g;
-const tplReplacer = string=>data=>string.replace(tplRegex,`[${data}].`);
-export const tpl = (s,props)=>s.replace(tplRegex,(_,key)=>`.${(key in props)?props[key]:key}.`);
-export const pcacheOne$ = (str)=>pipe( props=>tpl(str,props).split('.'), getCachedUnique$);
-export const pcache$ = (...strs)=>props=>{
-  return strs.length===0
-    ? of$(undefined)
-    : strs.length > 1
-      ? combine$(...strs.map(s=>pcacheOne$(s)(props)))
-      : pcacheOne$(strs[0])(props);
-};
-
-
-
-
-// debugging
-export const logoutput = msg=>(out)=>(isObservable(out)?map:identity)(logCache(msg))(out);
-export const logCache = msg=>(output)=>{
-  console.log(msg,`output`, output);
-  const inner = (lvl=cache,mapped={})=>{
-    if(!isPlainObject(lvl.latest)){return lvl.latest;}
-    if(lvl._){
-      mapped._ = mo(ife(isString),identity,v=>typeof v)(lvl._.latest);
-    }
-    let k;
-    for(k in lvl.c){
-      mapped[k]=inner(lvl.c[k]);
-    }
-    return mapped;
+  const set = (path='', parentPaths=[], fn=pipe(map(v=>v[path]),dropRepeats,remember)) => {
+    if(parentPaths.length<2){ return setSingleParent(path,parentPaths[0]||'');}
+    // on dynamically defined collections, recalculate the transitive reduction for each collection
+    // need to think through that more.  It's late, and multiple inheritance gets trickier.
+    // but... we're not inheriting.  ...later.
+    throw Error('TBD - multiple parent paths');
   };
-  console.log(msg,`cache`, JSON.stringify(inner(cache),null,1));
-  console.log(msg,`raw cache`, cache);
-  return output;
-}
+
+
+  // cases
+  // coll
+  // coll.coll
+  // coll[itemkey].prop
+  // coll.coll[itemkey].prop
+  const get = (path='')=>{
+    if (!isString(path)) {throw Error(`get requires a collection path string. Received: "${path}".`)}
+    if(pathIndex[path]){return pathIndex[path];}
+    const parts = path.split('.');
+    const lenminus1 = parts.length-1;
+    return parts.reduce((parent,part,i)=>{
+      // existing branch/leaf - return it
+      if(parent.c[part]){return parent.c[part];}
+      if(cacheRoot.c[part]){// (coll.coll)
+        throw new Error('define collection indices beforehand with setCollection, for now');
+      }
+      // if(i<lenminus1){child.c = {};} // new branch
+      // else new leaf coll[key] || coll[key].prop
+      return setSingleParent(part,parent.path,pipe(map(v=>v[part]),dropRepeats,remember));
+    },cacheRoot);
+  };
+  const geto = path=>get(path).o;
+  return {get:geto,set};
+};

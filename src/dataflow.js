@@ -2,26 +2,53 @@ import {createStore} from 'redux';
 import {hierarchy} from 'd3';
 import {createEventHandler} from 'recompose';
 import {pipe,identity,ensureArray,set,groupByKey,ox,matches,isNumber,ro,mo,fa,fo,ma,dpipe} from './lib/utils';
-import {from$,combine$,map,debounce,from,addListener,dropRepeats,sampleCombine,fold,drop,filter,remember} from './lib/utils$.js';
-import {initCache,cache$,tpl} from './lib/dataflow-cache.js'
+import {from$,of$,combine$,map,debounce,from,addListener,dropRepeats,sampleCombine,fold,drop,filter,remember} from './lib/utils$.js';
+// import {initCache,tpl,/*tpl*/} from './lib/dataflow-cache.js'
 import {analyse} from './analyse';
 import {loadRepoGraph} from './api'
 import {initialState} from './static/initial-state';
 
-
+// testing
+import {plog} from './lib/utils';
+import {initCache2} from './lib/dataflow-cache.js'
+import {addDebugListener} from './lib/utils$.js';
 
 /**
   State Setup
 **/
 initialState.userTokens['0'].value = process.env.REACT_APP_GITHUB_TOKEN;
-const tapUpdater = identity
-// const tapUpdater = updater=>pipe(plog('prevState'),updater,plog('nextState'));
+// const tapUpdater = identity
+const tapUpdater = updater=>pipe(plog('prevState'),updater,plog('nextState'));
 const store = createStore((state,{updater=identity})=>tapUpdater(updater)(state),initialState);
 const store$ = from$(store[Symbol.observable]()).remember();
 const dispatch = store.dispatch.bind(store);
-const cache = initCache(store$,initialState); // Cache only auto-reads store. No mutations.
+// const cache = initCache(store$,initialState); // Cache only auto-reads store. No mutations.
 
+const {get:cget,set:cset}  = initCache2(store$,initialState);
+// for use in react components
+export const cache$ = cget;
+const tplRegex = /\[(.+?)\]\.|\.(.+?)\./g;
+const tplReplacer = string=>data=>string.replace(tplRegex,`[${data}].`);
+export const tpl = (s,props)=>s.replace(tplRegex,(_,key)=>`.${(key in props)?props[key]:key}.`);
+export const pcacheOne$ = (str)=>pipe( props=>tpl(str,props), cache$);
+export const pcache$ = (...strs)=>props=>{
+  return strs.length===0
+    ? of$(undefined)
+    : strs.length > 1
+      ? combine$(...strs.map(s=>pcacheOne$(s)(props)))
+      : pcacheOne$(strs[0])(props);
+};
 
+// dpipe(
+//   cache$('repos.repo0'),
+//   map(plog(`repos`),),
+//   addDebugListener
+// )
+// dpipe(
+//   cache$('userTokens.0.value'),
+//   map(plog(`userTokens.0.value`),),
+//   addDebugListener
+// )
 
 
 /**
@@ -206,7 +233,7 @@ export const to_repo_remove = getHandler(
 export const to_repo_url = getHandler(
   debounce(500),
   filter(({value})=>!!value),
-  sampleCombine(repos$,repoNodes$,repoNodeOutEdges$,cache$('userTokens.0.valueZ')),
+  sampleCombine(repos$,repoNodes$,repoNodeOutEdges$,cache$('userTokens.0.value')),
   map(([props,allRepos,allrepoNodes,allRepoNodeOutEdges,token])=>{
     const {data:id,value:url} = props;
     console.log(`requesting`,{url,id,token});

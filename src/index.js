@@ -16,10 +16,9 @@ import {of$,combine$,map,debug,debounce,dropRepeats,flatMap,sampleCombine} from 
 import {getModalComponent,getModalHOC} from './lib/modal.js';
 // plus a few shorthands for vertical, horizontal, and grid style flexbox HOCs
 import {styl} from './lib/styles.js';
-import {cache$,pcache$} from './lib/dataflow-cache.js';
 
 import {toStore,repoNodes$,to_repo_copy,to_repo_remove,to_repo_url, nodeAnalyses$,
-  repoNodeOutEdges_by_repoid$, nodeAnalyses_by_repoid$,d3TreeStructure_by_repoid$,
+  repoNodeOutEdges_by_repoid$, nodeAnalyses_by_repoid$,d3TreeStructure_by_repoid$,cache$,pcache$
 } from './dataflow.js';
 
 import {Circle,Text,Div,Span,Img,H1,Input,A,Label,Svg,TextInput,Button,Header,Pre,P,toItemProps,
