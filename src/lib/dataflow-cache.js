@@ -1,5 +1,5 @@
 import {
-  ma,dpipe,identity,ensureArray,isObservable,split,pipe,isObjectLike,mo,ife,isString,
+  ma,dpipe,identity,ensureArray,isObservable,split,pipe,isObjectLike,mo,ife,isString,isArray
 } from './utils.js'
 import { map,dropRepeats,remember,of$,combine$,throw$ } from './utils$.js'
 
@@ -23,27 +23,36 @@ Note: The scope intentionally excludes:
 **/
 
 export const initCache = function(store$){
-  const cacheRoot = { o:store$, c:{}, path:'' };
-  const pathIndex = {'':cacheRoot}; // for O(1) lookups after first reference (+simpler debugging)
-
-  const setSingleParent = (path='',parentPath='',fn=identity)=>{
-    const childPath = parentPath+path;
-    if(pathIndex[childPath]){return pathIndex[childPath];}
-    const parent = pathIndex[parentPath];
-    return pathIndex[childPath] = parent.c[path] = {
-      o:fn(parent.o.map(v=>pathIndex[childPath].debug = v[path])),
-      parents:[parentPath],
-      path:childPath,
-      c:{}
-    };
+  const cacheRoot = { o:store$, path:'' };
+  const nodes = {'':cacheRoot}; // for O(1) lookups after first reference (+simpler debugging)
+  const outEdges = {};
+  const inEdges = {};
+  const set = ({
+    indexPath='',
+    dependencies=[cacheRoot],
+    fn=identity,
+  })=>{
+    if(nodes[indexPath]){return nodes[indexPath];}
+    inEdges[indexPath]=dependencies;
+    nodes[indexPath] = {path:indexPath};
+    nodes[indexPath].o = fn(...dependencies.map(d=>{
+        (outEdges[d.path]||(outEdges[d.path]={}));
+        outEdges[d.path][indexPath]=nodes[indexPath];
+        return d.o;
+      }))
+      .map(v=>nodes[indexPath].debug = v);// temp, for debugging
+    return nodes[indexPath];
   };
-  const set = (path='', parentPaths=[], fn=pipe(dropRepeats,remember)) => {
-    parentPaths = ensureArray(parentPaths);
-    if(parentPaths.length<2){return setSingleParent(path,parentPaths[0],fn);}
-    return setSingleParent(path,[''],fn(...parentPaths.map(p=>pathIndex[p].o)));
+  const mapPathsToNode = (dependsOn=[''],indexPath='',fn=pipe(map(pv=>pv[indexPath]),dropRepeats,remember)) => {
+    const dependencies = dependsOn.map(depPath=>{
+      if(!isString(depPath)){throw Error('ensure called with set([depStr,depStr], pathStr, fn');}
+      return nodes[depPath];
+    });
+    return set({dependencies,fn,indexPath});
     // on dynamically defined collections, recalculate the transitive reduction for each collection
-    // need to think through that more.  It's late, and multiple inheritance gets trickier.
-    // but... we're not inheriting.  ...later.
+    // Need to think through that more.
+    throw Error ('multiple path dependencies TBD');
+    // return fn(set(path,{dependenciesfn(...dependencies.map(p=>pathIndex[p].o))));
   };
 
 
@@ -54,17 +63,22 @@ export const initCache = function(store$){
   // coll.coll[itemkey].prop
   const get = (path='')=>{
     if (!isString(path)) {throw Error(`get requires a collection path string. Received: "${path}".`)}
-    if(pathIndex[path]){return pathIndex[path];}
-    return path.split('.').reduce((parent,part,i)=>{
+    if(nodes[path]){return nodes[path];}
+    let indexPath;
+    return path.split('.').reduce((parent,relPath,i)=>{
       // existing branch/leaf - return it
-      if(parent.c[part]){return parent.c[part];}
-      if(cacheRoot.c[part]){// (coll.coll)
-        throw new Error('define collection indices beforehand with setCollection, for now');
+      indexPath=relPath;
+      if(parent!==cacheRoot){
+        indexPath = `${parent.path}.${relPath}`;
+        if(outEdges[''][indexPath]){// (coll.coll)
+          throw new Error('define collection indices beforehand with setCollection, for now');
+        }
       }
-      // if(i<lenminus1){child.c = {};} // new branch
+      if(nodes[indexPath]){return nodes[indexPath];}
+      // if(i<lenminus1){} // new branch
       // else new leaf coll[key] || coll[key].prop
-      return setSingleParent(part,parent.path);
+      return set({indexPath, dependencies:[parent],fn:pipe(map(pv=>pv[relPath]),dropRepeats,remember)});
     },cacheRoot);
   };
-  return {get:path=>get(path).o, set:pipe(set,x=>x.o)};
+  return {get:path=>get(path).o, set:pipe(mapPathsToNode,x=>x.o)};
 };

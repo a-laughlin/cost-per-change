@@ -203,7 +203,7 @@ const MetricsBody = Div(
 // Dev Cost and Time Per Change Adjustments
 const DevCostPerHour = Input(
   hget$({defaultValue:pcache$('analysisMods[data].devcost')}),
-  pipeChanges(from_target_value,toStore('analysisMods[data].devcost')),
+  pipeChanges(from_target_value,plog(`analysisMods[data].devcost`),toStore('analysisMods[data].devcost')),
   h('w3 t0.8')
 );
 const DCtxt = Span(c(`Developer Hourly Rate, to calculate cost per change.`),v('wsPL'));

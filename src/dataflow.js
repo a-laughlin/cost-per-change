@@ -12,7 +12,7 @@ import {initialState} from './static/initial-state';
 // testing
 import {plog} from './lib/utils';
 import {initCache} from './lib/dataflow-cache.js'
-import {addDebugListener} from './lib/utils$.js';
+import {addDebugListener,debug} from './lib/utils$.js';
 
 
 
@@ -44,20 +44,28 @@ export const pcache$ = rest(cond(
 export const [repos$, repoNodes$, repoNodeOutEdges$, userTokens$, analysisMods$] = [
       'repos','repoNodes','repoNodeOutEdges','userTokens','analysisMods'].map(cache$);
 
-export const codeAnalysesRaw$ = dpipe(
-  cache$('repoNodes'),
-  fold((prevAnalyses,repoNodes)=>{
-    let changes = 0,nextLen=0;
-    const analyses = mo((n,id)=>{
-      if(prevAnalyses[id]){return prevAnalyses[id];}
-      changes++;
-      return {id,...analyse(n.path,n.code)};
-    })(repoNodes);
-    return changes===0 ? prevAnalyses : analyses;
-  },{}),
-  drop(1),
-  dropRepeats,
-  remember,
+const uniqueCollMap = ({prev={},pred=x=>false,mapNew=x=>x}={})=>{
+  const meta={prev,len:0};
+  return pipe(
+    map(input=>{
+      let nextLen=0, changes=0;
+      const prev = meta.prev;
+      const next = ro((next_temp,n,k)=>{
+        ++nextLen;
+        if(pred(prev[k],n)){return next_temp[k]=prev[k];}
+        ++changes;
+        next_temp[k]=mapNew(n);
+      })(input);
+      if(!changes && nextLen === meta.len){return prev;}
+      meta.len = nextLen;
+      return meta.prev = next;
+    }),
+    dropRepeats,
+    remember,
+  );
+};
+export const codeAnalysesRaw$ = cache.set(['repoNodes'],'codeAnalysesRaw',
+  uniqueCollMap({pred:prev=>!!prev,mapNew:next=>analyse(next.path,next.code)}),
 );
 
 export const nodeAnalyses$ = dpipe(
@@ -159,7 +167,7 @@ export const repoNodeOutEdges_by_repoid$ = pipe(map(groupByKey('repoid')), remem
     ... use getHandler for that
 **/
 export const toStore = str=>({value,data=''})=>{
-  dispatch({type:'fn',updater:state=>set(tpl(str,{data}),value,state)}); return {value,data};};
+  dispatch({type:'fn',updater:state=>set(tpl(str)({data}),value,state)}); return {value,data};};
 
 const assignToStore = data=>{dispatch({type:'fn',updater:state=>Object.assign({},state,...ensureArray(data))});}
 
@@ -183,10 +191,9 @@ export const to_repo_copy = getHandler(
     while(repos[repoid]){ repoid+='_1'; }
     const re = new RegExp(id,'g');
     const sRepo=(str)=>str.replace(re,repoid);
-    const transformRepo = (acc,v,k)=>{ acc[k]=v; if(k===id){acc[repoid]={...v,id:repoid,repoid}}};
+    const transformRepo = (acc,v,k)=>{ if(k===id){acc[repoid]={...v,id:repoid,repoid}}};
     const transformMods = transformRepo;
     const transformNode = (acc,v,k)=>{
-      acc[k]=v;
       if (v.repoid===id) {
         const fid = sRepo(k);
         acc[fid]={...v,id:fid,repoid};
@@ -194,10 +201,10 @@ export const to_repo_copy = getHandler(
       };
     };
     assignToStore({
-      repos:ro(transformRepo)(repos),
-      repoNodes:ro(transformNode)(repoNodes),
-      analysisMods:ro(transformMods)(mods),
-      repoNodeOutEdges:ro(transformNode)(repoNodeOutEdges),
+      repos:{...repos,...ro(transformRepo)(repos)},
+      repoNodes:{...repoNodes,...ro(transformNode)(repoNodes)},
+      analysisMods:{...mods,...ro(transformMods)(mods)},
+      repoNodeOutEdges:{...repoNodeOutEdges,...ro(transformNode)(repoNodeOutEdges)},
     });
   })
 );
