@@ -70,17 +70,17 @@ export const extension = {
       return node;
     }
   },
-  rootNodeSet:{ // should come after inOutEdgeMaps when composing
+  rootNodes:{ // should come after inOutEdgeMaps when composing
     getCollectionMeta:obj=>{
       if(obj.nodeMap === undefined || obj.inEdges === undefined){ throw new Error('rootNodeSet must come after inOutEdgeMaps') }
-      return ({...obj,rootNodeSet:new Set()})
+      return ({...obj,rootNodes:[]})
     },
-    postWalk:(collection,{inEdges,rootNodeSet,nodeMap,getNodeKey})=>{
+    postWalk:(collection,{inEdges,rootNodes,nodeMap,getNodeKey})=>{
       let nodeKey;
       nodeMap.forEach((node)=>{
         nodeKey = getNodeKey(node);
-        if(!inEdges.has(nodeKey)){rootNodeSet.add(nodeKey);}
-      })
+        if(!inEdges.has(nodeKey)){rootNodes.push(nodeKey);}
+      });
       return collection;
     }
   },
