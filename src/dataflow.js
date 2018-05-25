@@ -1,7 +1,8 @@
 import {createStore} from 'redux';
 import {hierarchy} from 'd3';
 import {createEventHandler} from 'recompose';
-import {pipe,identity,ensureArray,set,groupByKey,ox,matches,isNumber,ro,mo,fa,fo,ma,dpipe} from './lib/utils';
+import {pipe,identity,ensureArray,set,groupByKey,ox,matches,isNumber,ro,mo,fa,fo,ma,dpipe,rest,cond,
+        len,stubTrue} from './lib/utils';
 import {from$,of$,combine$,map,debounce,from,addListener,dropRepeats,sampleCombine,fold,drop,filter,remember} from './lib/utils$.js';
 // import {initCache,tpl,/*tpl*/} from './lib/dataflow-cache.js'
 import {analyse} from './analyse';
@@ -10,8 +11,10 @@ import {initialState} from './static/initial-state';
 
 // testing
 import {plog} from './lib/utils';
-import {initCache2} from './lib/dataflow-cache.js'
+import {initCache} from './lib/dataflow-cache.js'
 import {addDebugListener} from './lib/utils$.js';
+
+
 
 /**
   State Setup
@@ -22,33 +25,16 @@ const tapUpdater = updater=>pipe(plog('prevState'),updater,plog('nextState'));
 const store = createStore((state,{updater=identity})=>tapUpdater(updater)(state),initialState);
 const store$ = from$(store[Symbol.observable]()).remember();
 const dispatch = store.dispatch.bind(store);
-// const cache = initCache(store$,initialState); // Cache only auto-reads store. No mutations.
-
-const {get:cget,set:cset}  = initCache2(store$,initialState);
-// for use in react components
-export const cache$ = cget;
+const cache = initCache(store$);
 const tplRegex = /\[(.+?)\]\.|\.(.+?)\./g;
-const tplReplacer = string=>data=>string.replace(tplRegex,`[${data}].`);
-export const tpl = (s,props)=>s.replace(tplRegex,(_,key)=>`.${(key in props)?props[key]:key}.`);
-export const pcacheOne$ = (str)=>pipe( props=>tpl(str,props), cache$);
-export const pcache$ = (...strs)=>props=>{
-  return strs.length===0
-    ? of$(undefined)
-    : strs.length > 1
-      ? combine$(...strs.map(s=>pcacheOne$(s)(props)))
-      : pcacheOne$(strs[0])(props);
-};
+const tpl = s=>props=>s.replace(tplRegex,(_,key)=>`.${(key in props)?props[key]:key}.`);
+export const cache$ = cache.get;
+export const pcache$ = rest(cond(
+  [len(0),arr=>props=>of$(undefined)],
+  [len(1),strs=>pipe(tpl(strs[0]), cache$)],
+  [stubTrue,strs=>props=>combine$(...strs.map(s=>cache$(tpl(s)(props))))],
+));
 
-// dpipe(
-//   cache$('repos.repo0'),
-//   map(plog(`repos`),),
-//   addDebugListener
-// )
-// dpipe(
-//   cache$('userTokens.0.value'),
-//   map(plog(`userTokens.0.value`),),
-//   addDebugListener
-// )
 
 
 /**
@@ -56,7 +42,7 @@ export const pcache$ = (...strs)=>props=>{
   (eventually migrate to cache$ once it supports them)
 **/
 export const [repos$, repoNodes$, repoNodeOutEdges$, userTokens$, analysisMods$] = [
-      'repos','repoNodes','repoNodeOutEdges','userTokens','analysisMods'].map(s=>cache$(s));
+      'repos','repoNodes','repoNodeOutEdges','userTokens','analysisMods'].map(cache$);
 
 export const codeAnalysesRaw$ = dpipe(
   cache$('repoNodes'),
@@ -74,7 +60,6 @@ export const codeAnalysesRaw$ = dpipe(
   remember,
 );
 
-// Derived Collections
 export const nodeAnalyses$ = dpipe(
   combine$(codeAnalysesRaw$,analysisMods$),
   sampleCombine(repoNodes$),
