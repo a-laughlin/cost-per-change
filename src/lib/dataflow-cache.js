@@ -39,7 +39,8 @@ export const initCache2 = function(store$,initialState={}){
     };
   };
   const set = (path='', parentPaths=[], fn=pipe(map(v=>v[path]),dropRepeats,remember)) => {
-    if(parentPaths.length<2){ return setSingleParent(path,parentPaths[0]||'');}
+    parentPaths = ensureArray(parentPaths);
+    if(parentPaths.length<2){ return setSingleParent(path,parentPaths[0],fn);}
     // on dynamically defined collections, recalculate the transitive reduction for each collection
     // need to think through that more.  It's late, and multiple inheritance gets trickier.
     // but... we're not inheriting.  ...later.
