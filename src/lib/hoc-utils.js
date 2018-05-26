@@ -1,7 +1,7 @@
 /* eslint-disable no-unused-vars */
 import {Component,isValidElement,cloneElement,createElement as Elem,Children,Fragment} from 'react';
 import PropTypes from 'prop-types';
-import {mapProps, withReducer, isClassComponent,withProps,
+import {mapProps, withReducer, isClassComponent,withProps,shouldUpdate,
   withHandlers,mapPropsStream,shallowEqual,componentFromStream,createEventHandler
 } from 'recompose';
 // import {styleObjectToClasses,mergeStyles} from './styles.js';
@@ -15,8 +15,8 @@ import {
   partition,spread,pget,or,isPromise,isObjectLike,mo,unzip,zipObject,last
 } from './utils';
 import {of$,from$,take,combine$,map,toArray,periodic$,flatMap as $flatMap,combineWith,
-  flattenSequentially,flattenConcurrently,buffer,never$,addDebugListener,debug,
-  flattenDeep as flattenDeep$,ensureObservable,drop,dropRepeats,fold,fromPromise$
+  flattenSequentially,flatMapLatest,flattenConcurrently,buffer,never$,addDebugListener,debug,
+  flattenDeep as flattenDeep$,ensureObservable,drop,dropRepeats,fold,fromPromise$,debounce
 } from './utils$.js';
 
 
@@ -82,16 +82,14 @@ export const childrenHOCFactory = (function() {
     mapAllChildrenProps = ()=>({}),
   }={}) => (...pipes)=>pipes.length===0
     ? identity
-    : BaseComponent=>props=>pipe(
-      normalizePipes(mapAllChildrenProps(props||{})),
-      arr=>Elem(
-        componentFromStream(pipe(
-          combineWith(...arr),
-          map(([p,...children])=>Elem(BaseComponent, p, pipe(unwrap,unwrapSingles)(children)))
-        )),
-        props
-      )
-    )(pipes)
+    : BaseComponent=>shouldUpdate(x=>false)(componentFromStream(pipe(
+      map(props=>pipe(
+        normalizePipes(mapAllChildrenProps(props||{})),
+        spread(combine$),
+        map(children=>Elem(BaseComponent,props,pipe(unwrap,unwrapSingles)(children)))
+      )(pipes)),
+      flattenConcurrently,
+    )))
 }());
 
 
@@ -141,44 +139,11 @@ export const pipeMouseLeave = handlerPipeHOCFactory({on:'MouseLeave'});
 /**
  * Pipe Utils
  */
-export const tpl = curry((s,data)=>s.replace(/\[(.+?)\]/g,(_,key)=>`[${get(key)(data)}]`),2);
 
-
-
-
-
-
-
-
-// export const idxMapFactory = (dataKey='data')=>(...streamsAndArgs)=>props$=>{
-//   const [streams$,fns]=partition(isObservable)(streamsAndArgs);
-//   return combine$(ensureObservable(props$),...streams$).map(
-//     pipe(
-//       ([props,...streams])=>streams.map(s=>s[props[dataKey]]),
-//       spread(pipe(...fns.map(f=>pget(f)))),
-//     )
-//   );
-// };
-export const idxMapFactory = (dataKey='data')=>(...streamsAndArgs)=>props$=>{
-  const [streams$,fns]=partition(isObservable)(streamsAndArgs);
-  return pipe(
-    ()=>combine$(ensureObservable(props$),...streams$),
-    fold((last,[props,...colls])=>{
-      const next = colls.map(c=>c[props[dataKey]]);
-      if(shallowEqual(last,next)){return last;}
-      return next;
-    },[]),
-    drop(1),
-    dropRepeats,
-    map(spread(pipe(...fns.map(f=>pget(f)))))
-  )();
-};
-
-
-export const toItemPropsFactory = (dataKey='data')=>(...Components)=>(ownProps)=>Components.map((C,i)=>(props)=>(
+export const toChildren = (dataKey='data')=>(...Components)=>(ownProps)=>Components.map((C,i)=>(props)=>(
   Elem(C,{key:(ownProps[dataKey]||'')+i,...props,...ownProps})
 ));
-export const toItemProps = toItemPropsFactory();
+export const toItemProps = toChildren();
 
 
 
@@ -190,7 +155,6 @@ export const simpleStore = (initialState={})=>{
 }
 
 export const $get = cond(
-  // ordering based on lodash source code, for minimum checks
   [or(isString,isNumber),s=>props=>of$((s in props)?props[s]:s)],
   [isObservable,obs$=>props=>obs$],
   [isArray,arr=>props=>combine$(of$(props),...arr.map(v=>$get(v)(props)))],

@@ -36,23 +36,14 @@ export const initCache = function(store$){
     inEdges[indexPath]=dependencies;
     nodes[indexPath] = {path:indexPath};
     nodes[indexPath].o = fn(...dependencies.map(d=>{
-        (outEdges[d.path]||(outEdges[d.path]={}));
-        outEdges[d.path][indexPath]=nodes[indexPath];
-        return d.o;
-      }))
-      .map(v=>nodes[indexPath].debug = v);// temp, for debugging
+      (outEdges[d.path]||(outEdges[d.path]={}));
+      outEdges[d.path][indexPath]=nodes[indexPath];
+      return d.o;
+    }));
     return nodes[indexPath];
   };
   const mapPathsToNode = (dependsOn=[''],indexPath='',fn=pipe(map(pv=>pv[indexPath]),dropRepeats,remember)) => {
-    const dependencies = dependsOn.map(depPath=>{
-      if(!isString(depPath)){throw Error('ensure called with set([depStr,depStr], pathStr, fn');}
-      return nodes[depPath];
-    });
-    return set({dependencies,fn,indexPath});
-    // on dynamically defined collections, recalculate the transitive reduction for each collection
-    // Need to think through that more.
-    throw Error ('multiple path dependencies TBD');
-    // return fn(set(path,{dependenciesfn(...dependencies.map(p=>pathIndex[p].o))));
+    return set({fn,indexPath,dependencies:dependsOn.map(depPath=>nodes[depPath])});
   };
 
 

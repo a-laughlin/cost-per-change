@@ -4,13 +4,13 @@ import registerServiceWorker from './lib/registerServiceWorker';
 
 /* eslint-disable no-unused-vars */
 import * as d3 from 'd3';
-import {withProps} from 'recompose';
+import {withProps,shouldUpdate} from 'recompose';
 import {schemeReds,scaleOrdinal,interpolateReds} from 'd3-scale-chromatic';
 
 import logo from './static/cost-per-change.png';
 import './static/index.css';
 import {pipe,compose,plog,ensureArray, mx, ma, get,cond,stubNull,isUndefined,round,sortBy,ifenx,ife,
-  fa, pget,reverse,slice,is,len,matches,stubTrue,flatten,argsToArray,converge,
+  fa, pget,reverse,slice,is,len,matches,stubTrue,flatten,argsToArray,converge,dpipe
 } from './lib/utils.js';
 import {of$,combine$,map,debug,debounce,dropRepeats,flatMap,sampleCombine} from './lib/utils$.js';
 import {getModalComponent,getModalHOC} from './lib/modal.js';
@@ -18,11 +18,11 @@ import {getModalComponent,getModalHOC} from './lib/modal.js';
 import {styl} from './lib/styles.js';
 
 import {toStore,repoNodes$,to_repo_copy,to_repo_remove,to_repo_url, nodeAnalyses$,
-  repoNodeOutEdges_by_repoid$, nodeAnalyses_by_repoid$,d3TreeStructure_by_repoid$,cache$,pcache$
+  nodeAnalyses_by_repoid$,d3TreeStructure_by_repoid$,cache$,pcache$
 } from './dataflow.js';
 
 import {Circle,Text,Div,Span,Img,H1,Input,A,Label,Svg,TextInput,Button,Header,Pre,P,toItemProps,
-  childrenHOCFactory, pipeClicks, pipeChanges,hget$,idxMapFactory
+  childrenHOCFactory, pipeClicks, pipeChanges,hget$
 } from './lib/hoc-utils.js';
 
 // data imports
@@ -38,11 +38,9 @@ const withModal = getModalHOC();
 // utils
 const setProp = str=>(...Components)=>pipe(({[str]:data})=>({data}),toItemProps(...Components),flatten);
 const setOwnProps = fn=>(...Components)=>pipe(fn,toItemProps(...Components),flatten);
-const from_target_value = pget({value:'target.value',data:'data'});
-const idx = idxMapFactory(); // can be replaced by pcache eventually
 const pass_id = setOwnProps(pget({data:'id'}));
 const pass_repoid = setOwnProps(pget({data:'repoid'}));
-const cpipe = (...Components)=>(...fns)=>converge(Components.map(C=>pipe(...fns)(C)));
+const from_target_value = pget({value:'target.value',data:'data'});
 
 // Reds Scale Generator
 const reds = slice(0,5)(schemeReds[8]);
@@ -107,7 +105,7 @@ const getPath = (parent,node)=>pathGen({source:[node.y,node.x],target:[parent.y,
 const getColor = ife(isUndefined,x=>'#fff',
   ({costPerChangeMin:n,costPerChangeMax:x,costPerChange:c})=>getRedGenerator(n,x)(c));
 const Circ = Circle(
-  hget$(idx(nodeAnalyses$,getColor,fill=>({r:4,style:{fill,stroke:'#ccc',strokeWidth:'1px'}}))),
+  hget$(pcache$('nodeAnalyses[data]',getColor,fill=>({r:4,style:{fill,stroke:'#ccc',strokeWidth:'1px'}}))),
   withModal(Pre(c(`file click functionality not implemented yet`)))
 );
 const CircText = Text(withProps({dy:'0.35em',x:-6,textAnchor:'end'}), c(get('data')), styl('peN usN t8px'));
@@ -118,19 +116,19 @@ const TreeRoot = ({node,parentNode,id,analyses})=>(
       <TreeRoot parentNode={node} node={c} id={`${id}.${i}`} key={`${id}.${i}`} />
     ))}
     <g transform={`translate(${node.y},${node.x})`}>
-      <Circ data={node.data.id} />
-      <CircText data={node.data.name}/>
+      <Circ data={node.data} />
+      <CircText data={node.data}/>
     </g>
   </g>
 );
 
 const TreeSVG = Svg(
-  c(idx(d3TreeStructure_by_repoid$,(treeObj)=>{
+  c(pipe(pcache$('treeNodes[data]',treeObj=>{
     if(treeObj === undefined){return stubNull;} // TODO figure out why this happens
     const w=290, h=290;
     const root = Object.assign(d3.tree().size([h,w])(treeObj),{x:(h-0.1*h)/2,y:0.1*h});
-    return toItemProps(TreeRoot)({node:root,parentNode:root,id:root.data.repoid});
-  })),
+    return TreeRoot({node:root,parentNode:root,id:root.data.repoid});
+  }))),
   h('minw300px minh300px')
 );
 
@@ -163,11 +161,11 @@ const PathHeader = Span(c('Path'));
 
 // Metrics Grid Cells
 
-const Cell_cpc = Span(c(idx(nodeAnalyses$,'costPerChange',round)));
-const Cell_usr_imp = Span(c(idx(nodeAnalyses$,'userImpact',round)));
-const Cell_path = Span(c(idx(cache$('repoNodes'),'path',p=>p.replace(/^.+\//g,''))));
+const Cell_cpc = Span(c(pcache$('nodeAnalyses[data].costPerChange',round)));
+const Cell_usr_imp = Span(c(pcache$('nodeAnalyses[data].userImpact',round)));
+const Cell_path = Span(c(pcache$('repoNodes[data].path',p=>p.replace(/^.+\//g,''))));
 const Cell_rules_imp = Div(c(pipe(
-  idx(nodeAnalyses$), dropRepeats, map((node)=>{
+  pcache$('nodeAnalyses[data]'), dropRepeats, map((node)=>{
     const styles = ([// should generate these based on selected rules, but select/deselect nodes isn't implemented yet
       {backgroundColor:reds[4],width:(node.maintainability/node.maintainabilityMax)*100},
       {backgroundColor:reds[3],width:(node.effort/node.effortMax)*100},
@@ -182,17 +180,14 @@ const Cell_rules_imp = Div(c(pipe(
 const MetricsBody = Div(
   c([PathHeader, RulesImpact, CostPerChange, UserImpact]
     .map(gi('mb.3 nthn-+4mb1','nthn4-3w19%_mr1% nthn4-2w44%_mr1% nthn4-1w19%_mr1% nthn4w14%_mr1%')),
-    pipe(
-      idx(nodeAnalyses_by_repoid$),
-      dropRepeats,
-      map(pipe(
-        sortBy('costPerChange'),
-        reverse,
-        slice(0,10),
-        ma(pipe(
-          pass_id(Cell_path, Cell_rules_imp, Cell_cpc, Cell_usr_imp),
-          ma(gi('mb.3 nthn-+4mb1 nthn4-3w19%_mr1% nthn4-2w44%_mr1% nthn4-1w19%_mr1% nthn4w14%_mr1%'))
-        ))
+    pcache$('repos.nodeAnalyses[data]',
+      plog(`incoming analyses by repoid`),
+      sortBy('costPerChange'),
+      reverse,
+      slice(0,10),
+      ma(pipe(
+        pass_id(Cell_path, Cell_rules_imp, Cell_cpc, Cell_usr_imp),
+        ma(gi('mb.3 nthn-+4mb1 nthn4-3w19%_mr1% nthn4-2w44%_mr1% nthn4-1w19%_mr1% nthn4w14%_mr1%'))
       ))
     )
   ),
@@ -220,19 +215,19 @@ const TPChlp = Span(c(QMark),withModal(TPCtxt));
 const TPClabel = Label(c('Time Per Change'),h('t0.8'));
 
 const MetricsParams = Div(
-  c(cpipe(TPClabel, TPChlp, TimePerChange, DClabel, DChelp, DevCostPerHour)(hi('ml.5'))),
+  c([TPClabel, TPChlp, TimePerChange, DClabel, DChelp, DevCostPerHour].map(hi('ml.5'))),
   h('mtAuto')
 );
 
-const FileMetrics = Div(c(cpipe(MetricsBody,MetricsParams)(vi('mb.5'))), v);
-const Repo = Div(c(cpipe(TreeSVG,Rules,FileMetrics)(hi('nth1mr1 nth2mr1'))),h('fAIStretch'));
+const FileMetrics = Div(c([MetricsBody,MetricsParams].map(vi('mb.5'))), v);
+const Repo = Div(c([TreeSVG,Rules,FileMetrics].map(hi('nth1mr1 nth2mr1'))),h('fAIStretch'));
 const RepoList = Div(c(cache$('repos').map(ma(pipe(pass_id(RepoHeader,Repo),ma(vi('mb.5 w100%')))))),v);
 
 // Header
 const AppLogo = Img(withProps({ src:logo, alt:'Cost Per Change Logo'}));
 const AppHeader = Header(c(hi('h80x')(AppLogo)), h('fAIC fJCC bgF w100%'));
 
-const App = Div(c(cpipe(AppHeader,TokenArea,RepoList,getModalComponent())(vi('mb1 w100%'))),v);
+const App = Div(c([AppHeader,TokenArea,RepoList,getModalComponent()].map(vi('mb1 w100%'))),v);
 
 ReactDOM.render(createElement(App), document.getElementById('root'));
 registerServiceWorker();

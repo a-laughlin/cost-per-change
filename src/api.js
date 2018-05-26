@@ -97,8 +97,9 @@ export const loadRepoGraph = ({id,url,token})=>{
   return composeBFWalkerAsync([
     extension.nodeMap,
     extension.inOutEdgeMaps,
+    extension.rootNodes,
     {
-      getCollectionMeta:(obj)=>({...obj,repoNodes:{},repoNodeOutEdges:{}}),
+      getCollectionMeta:(obj)=>({...obj,_rootNodes:{},repoNodes:{},repoNodeOutEdges:{}}),
       getNodeKey:n=>n.id,
       getRelated:(relArr,node)=>{
         if(hasCode(node)){return relArr;}
@@ -119,17 +120,22 @@ export const loadRepoGraph = ({id,url,token})=>{
         })
       },
       postWalk:(collection,cdata)=>{
-        const {nodeMap,inEdges,outEdges,repoNodes,repoNodeOutEdges} = cdata;
-        const withoutText = omit(['text'])
+        const {nodeMap,inEdges,outEdges,repoNodes,repoNodeOutEdges,_rootNodes,rootNodes} = cdata;
+        const withoutText = omit(['text']);
         let edges;
         nodeMap.forEach((v,k)=>{
-          repoNodes[k]=v.text===undefined?v:Object.assign(withoutText(v),{code:v.text})
+          repoNodes[k]=v.text===undefined?v:Object.assign(withoutText(v),{code:v.text});
           edges = outEdges.get(k);
           if(edges){repoNodeOutEdges[k]={id:k,repoid:id,edges};}
+        });
+        rootNodes.forEach((n)=>{
+          _rootNodes[n]=repoNodes[n];
         });
         return collection;
       },
       clearCollectionMeta:(cdata)=>{
+        cdata.rootNodes = cdata._rootNodes;
+        delete cdata._rootNodes;
         ['nodeMap','inEdges','outEdges'].forEach((k)=>{
           cdata[k].clear()
           delete cdata[k];
