@@ -23,22 +23,27 @@ initialState.userTokens['0'].value = process.env.REACT_APP_GITHUB_TOKEN;
 // const tapUpdater = identity
 const tapUpdater = updater=>pipe(plog('prevState'),updater,plog('nextState'));
 const store = createStore((state,{updater=identity})=>tapUpdater(updater)(state),initialState);
-const store$ = from$(store[Symbol.observable]()).remember();
 const dispatch = store.dispatch.bind(store);
+const store$ = from$(store[Symbol.observable]()).remember();
 const cache = initCache(store$);
+
+
+/**
+  Cache Utils
+  (to eventually move somewhere else)
+**/
 const tplRegex = /\[(.+?)\]\.?/g;
 const tpl = s=>props=>s.replace(tplRegex,(_,k)=>`.${(k in props)?props[k]:k}.`).replace(/\.$/,'');
 export const cache$ = cache.get;
 export const pcache$ = (str,...fns)=>pipe(tpl(str),cache$,(fns[0]?map(pipe(...fns)):identity));
 
-
-
-/**
-  Derived Collections
-  (eventually migrate to cache$ once it supports them)
-**/
-export const [repos$, repoNodes$, rootNodes$,repoNodeOutEdges$, userTokens$, analysisMods$] = [
-      'repos','repoNodes','rootNodes','repoNodeOutEdges','userTokens','analysisMods'].map(cache$);
+const derivedIndex = (key,nestedKey)=>derivedColl({
+  pred:(p,n)=>p && p[n[key]]&&p[n[key]][n[nestedKey]],
+  mapNew:(n,k,acc)=>{
+    acc[n[key]] || (acc[n[key]] = {});
+    acc[n[key]][n[nestedKey]]=n;
+  },
+});
 
 const derivedColl = ({prev={},pred=pv=>!!pv,mapNew=x=>x}={})=>{
   const meta={prev,len:0};
@@ -47,7 +52,6 @@ const derivedColl = ({prev={},pred=pv=>!!pv,mapNew=x=>x}={})=>{
     map(input=>{
       let nextLen=0, changes=0;
       const prev = meta.prev;
-      // console.log(`input`, input);
       let optionalReturn;
       const next = ro((next_temp,n,k)=>{
         ++nextLen;
@@ -56,8 +60,6 @@ const derivedColl = ({prev={},pred=pv=>!!pv,mapNew=x=>x}={})=>{
         optionalReturn = mapNew(n,k,next_temp);
         if(optionalReturn){next_temp[k]=mapNew(n,k,next_temp);}
       })(input);
-      // console.log(`after input:changes,nextLen,next`, changes,nextLen,next);
-      // console.log(`next`,input);
       if(!changes && nextLen === meta.len){return prev;}
       meta.len = nextLen;
       return meta.prev = next;
@@ -66,15 +68,16 @@ const derivedColl = ({prev={},pred=pv=>!!pv,mapNew=x=>x}={})=>{
     remember,
   );
 };
-const derivedIndex = (key,nestedKey)=>derivedColl({
-  pred:(p,n)=>p && p[n[key]]&&p[n[key]][n[nestedKey]],
-  mapNew:(n,k,acc)=>{
-    acc[n[key]] || (acc[n[key]] = {});
-    acc[n[key]][n[nestedKey]]=n;
-  },
-})
 
-export const d3TreeStructure_by_repoid$ = cache.set(['rootNodes','repoNodeOutEdges'],'treeNodes',pipe(
+
+
+/**
+  Derived Collections
+**/
+export const [repos$, repoNodes$, rootNodes$,repoNodeOutEdges$, analysisMods$] = [
+      'repos','repoNodes','rootNodes','repoNodeOutEdges','analysisMods'].map(cache$);
+
+export const d3Tree$ = cache.set(['rootNodes','repoNodeOutEdges'],'treeNodes',pipe(
   combine$,
   map(([roots,edges])=>ro((acc,{repoid,id})=>{acc[repoid]={repoid,id,edges};})(roots)),
   derivedColl({ mapNew:({id,edges,repoid})=>hierarchy(id,i=>(edges[i]||{edges:[]}).edges)}),
@@ -125,12 +128,6 @@ export const nodeAnalyses$ = cache.set(
   )
 );
 
-
-
-/**
-  Joins
-**/
-
 export const nodeAnalyses_by_repoid$ = cache.set(['nodeAnalyses'],'repos.nodeAnalyses',
   derivedIndex('repoid','id')
 );
@@ -170,7 +167,6 @@ const getHandler = (...fns)=>{ // for more complex action creators
 /**
   Store Updaters
 **/
-
 export const to_repo_copy = getHandler(
   sampleCombine(repos$,repoNodes$,rootNodes$,repoNodeOutEdges$,analysisMods$),
   map(([id,repos,repoNodes,rootNodes,repoNodeOutEdges,mods])=>{
@@ -182,10 +178,8 @@ export const to_repo_copy = getHandler(
     const transformNode = (acc,v,k)=>{
       if (v.repoid!==id) {return;}
       const fid = sRepo(k);
-      console.log(`v.repoid`, v.repoid);
       acc[fid]={...v,id:fid,repoid};
       if(v.edges){
-        console.log(`EDGES`, v.edges);
         acc[fid].edges=v.edges.map(sRepo);
       };
     };
@@ -227,8 +221,6 @@ export const to_repo_url = getHandler(
       let maxKey,minKey;
       const repo = {...allRepos[id],url}; // add url
       const repos = {...allRepos,[id]:repo};
-      // const omittedNodes = ox(matches({repoid:id}))(allrepoNodes);
-      // console.log(`omittedNodes`, omittedNodes);
       const repoNodeOutEdges = {...ox(matches({repoid:id}))(allRepoNodeOutEdges),...newEdges};
       const repoNodes = {...ox(matches({repoid:id}))(allrepoNodes), ...newNodes};
       const rootNodes = {...ox(matches({repoid:id}))(allRootNodes), ...newRoots};

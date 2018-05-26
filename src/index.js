@@ -78,10 +78,11 @@ const TokenArea = Div(
 
 
 
+
 // Repo Header
 const RepoUrlInput = TextInput(
   hget$({defaultValue:pcache$('repos[data].url')}),
-  pipeChanges( from_target_value,to_repo_url),
+  pipeChanges(from_target_value,to_repo_url),
   h('t1em w100% b0 bb1x')
 );
 const RepoUrlContainer = Div(c(RepoUrlInput),h('fGrow1'));
@@ -121,16 +122,16 @@ const TreeRoot = ({node,parentNode,id,analyses})=>(
     </g>
   </g>
 );
-
 const TreeSVG = Svg(
-  c(pipe(pcache$('treeNodes[data]',treeObj=>{
-    if(treeObj === undefined){return stubNull;} // TODO figure out why this happens
+  c(pipe(pcache$('treeNodes[data]',treeObj=>{ // can be undefined if react renders before stream
     const w=290, h=290;
     const root = Object.assign(d3.tree().size([h,w])(treeObj),{x:(h-0.1*h)/2,y:0.1*h});
     return TreeRoot({node:root,parentNode:root,id:root.data.repoid});
   }))),
   h('minw300px minh300px')
 );
+
+
 
 
 // Rules
@@ -147,6 +148,8 @@ const MaintRule = Span(c('Maintainability',Maint_hlp_trigger),h);
 const Rules = Div(c('Rules',[MaintRule,EffortRule,CyclomaticRule].map(vi(rule_styles))),v);
 
 
+
+
 // Metrics Grid Header Row
 const Rules_imp_txt = Span(c(`How do this file's rules compare against repo max?`),v('wsPL'));
 const Rules_imp_hlp_trigger = Span(c(QMark),withModal(Rules_imp_txt));
@@ -159,8 +162,10 @@ const User_imp_hlp_trigger = Span(c(QMark),withModal(User_imp_txt));
 const UserImpact = Span(c('User Impact',User_imp_hlp_trigger),h);
 const PathHeader = Span(c('Path'));
 
-// Metrics Grid Cells
 
+
+
+// Metrics Grid Cells
 const Cell_cpc = Span(c(pcache$('nodeAnalyses[data].costPerChange',round)));
 const Cell_usr_imp = Span(c(pcache$('nodeAnalyses[data].userImpact',round)));
 const Cell_path = Span(c(pcache$('repoNodes[data].path',p=>p.replace(/^.+\//g,''))));
@@ -195,6 +200,8 @@ const MetricsBody = Div(
 );
 
 
+
+
 // Dev Cost and Time Per Change Adjustments
 const DevCostPerHour = Input(
   hget$({defaultValue:pcache$('analysisMods[data].devcost')}),
@@ -219,6 +226,10 @@ const MetricsParams = Div(
   h('mtAuto')
 );
 
+
+
+
+// Base Layout
 const FileMetrics = Div(c([MetricsBody,MetricsParams].map(vi('mb.5'))), v);
 const Repo = Div(c([TreeSVG,Rules,FileMetrics].map(hi('nth1mr1 nth2mr1'))),h('fAIStretch'));
 const RepoList = Div(c(cache$('repos').map(ma(pipe(pass_id(RepoHeader,Repo),ma(vi('mb.5 w100%')))))),v);

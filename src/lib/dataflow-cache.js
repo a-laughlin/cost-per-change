@@ -43,7 +43,11 @@ export const initCache = function(store$){
     return nodes[indexPath];
   };
   const mapPathsToNode = (dependsOn=[''],indexPath='',fn=pipe(map(pv=>pv[indexPath]),dropRepeats,remember)) => {
-    return set({fn,indexPath,dependencies:dependsOn.map(depPath=>nodes[depPath])});
+    return set({fn,indexPath,dependencies:dependsOn.map(depPath=>{
+      if(!isString(depPath)){throw Error('ensure called with set([depStr,depStr], pathStr, fn');}
+      if(!nodes[depPath]){throw Error(`"${depPath}" must be set for "${indexPath}" to depend on it`);}
+      return nodes[depPath];
+    })});
   };
 
 
